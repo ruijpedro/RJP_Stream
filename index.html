@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#06111f" />
+  <meta name="description" content="RJP Stream - agregador multimédia responsivo" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="assets/rjp-stream-icon.png" />
+  <link rel="stylesheet" href="src/styles.css" />
+  <title>RJP Stream</title>
+</head>
+<body>
+  <div id="app"></div>
+  <input id="m3uFileInput" type="file" accept=".m3u,.m3u8,text/plain,application/vnd.apple.mpegurl" hidden />
+  <input id="epgFileInput" type="file" accept=".xml,.xmltv,text/xml,application/xml" hidden />
+  <input id="bundleFileInput" type="file" accept=".json,application/json" hidden />
+  <input id="backupFileInput" type="file" accept=".json,application/json" hidden />
+  <input id="wgFileInput" type="file" accept=".conf,text/plain" hidden />
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
