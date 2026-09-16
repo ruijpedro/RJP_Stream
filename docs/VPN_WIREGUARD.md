@@ -1,6 +1,6 @@
-# VPN WireGuard — RJP Stream V0.3
+# VPN WireGuard — RJP Stream V0.3.1
 
-A V0.3 acrescenta um **plugin Android nativo** (`RJPVpn`) ao projeto Capacitor. O plugin usa a biblioteca embebível oficial WireGuard para Android:
+A V0.3.1 acrescenta um **plugin Android nativo** (`RJPVpn`) ao projeto Capacitor. O plugin usa a biblioteca embebível oficial WireGuard para Android:
 
 ```gradle
 implementation 'com.wireguard.android:tunnel:1.0.20260102'

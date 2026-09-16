@@ -1,8 +1,10 @@
-# RJP Stream V0.3
+# RJP Stream V0.3.1
 
 Terceira versão funcional do projeto **RJP Stream**, mantendo um único código-base responsivo para telemóvel, tablet e televisão e builds específicos para Android/Android TV, Samsung Tizen e LG webOS.
 
-## Novidades da V0.3
+## Novidades da V0.3.1
+
+- **Correção do build Android:** `typescript` foi adicionado às `devDependencies`, permitindo ao Capacitor carregar `capacitor.config.ts` durante `npx cap add android`.
 
 - **VPN WireGuard nativa no Android/Android TV** através de um plugin Capacitor próprio (`RJPVpn`).
 - Biblioteca embebível WireGuard Android `com.wireguard.android:tunnel:1.0.20260102`.
@@ -13,7 +15,7 @@ Terceira versão funcional do projeto **RJP Stream**, mantendo um único código
 - Estado VPN sincronizado quando a app volta ao primeiro plano.
 - **EPG/XMLTV melhorado**: canais, logótipos, programa atual, próximo programa e barra de progresso.
 - Correção da leitura de datas XMLTV com fuso horário.
-- Workflow GitHub atualizado para gerar o APK Android V0.3.
+- Workflow GitHub atualizado para gerar o APK Android V0.3.1.
 - `minSdkVersion` Android ajustado para 24 para compatibilidade com a biblioteca WireGuard usada.
 
 ## Funcionalidades já existentes
@@ -89,7 +91,7 @@ O script `patch-android.mjs` aplica os elementos Android TV e cria o plugin VPN 
 O workflow `.github/workflows/build-android.yml` executa o build do APK automaticamente. O artefacto chama-se:
 
 ```text
-RJP-Stream-V0.3-Android-debug
+RJP-Stream-V0.3.1-Android-debug
 ```
 
 ## Nota de utilização

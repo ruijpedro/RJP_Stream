@@ -1,4 +1,4 @@
-# Plano de testes — RJP Stream V0.3
+# Plano de testes — RJP Stream V0.3.1
 
 ## Web
 
