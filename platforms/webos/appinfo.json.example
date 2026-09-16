@@ -1,0 +1,10 @@
+{
+  "id": "pt.rjp.stream",
+  "version": "0.1.0",
+  "vendor": "RJP",
+  "type": "web",
+  "main": "index.html",
+  "title": "RJP Stream",
+  "icon": "assets/rjp-stream-icon.png",
+  "largeIcon": "assets/rjp-stream-icon.png"
+}
