@@ -15,9 +15,10 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - run: npm install
+      - run: npm install --include=dev
       - run: npm run smoke
       - run: npm run build
+      - run: npx tsc --version
       - run: npx cap add android
       - run: npx cap sync android
       - run: node scripts/patch-android.mjs
@@ -26,5 +27,5 @@ jobs:
         run: ./gradlew assembleDebug
       - uses: actions/upload-artifact@v4
         with:
-          name: RJP-Stream-V0.3-Android-debug
+          name: RJP-Stream-V0.3.1-Android-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
