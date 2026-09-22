@@ -1,15 +1,17 @@
 {
   "name": "rjp-stream",
-  "version": "0.3.1",
+  "version": "1.2.0",
   "private": true,
-  "description": "RJP Stream - app responsiva para Android, Android TV, Samsung Tizen e LG webOS",
+  "description": "RJP Stream V1.2 - agregador multimédia responsivo com fontes e atalhos Web pessoais",
   "scripts": {
     "build": "node scripts/build.mjs",
     "smoke": "node scripts/smoke.mjs",
     "preview": "npx serve dist -l 4173",
     "cap:add:android": "npx cap add android",
     "cap:sync": "npm run build && npx cap sync android",
-    "android:patch": "node scripts/patch-android.mjs"
+    "android:patch": "node scripts/patch-android.mjs",
+    "build:tv": "node scripts/build-tv.mjs",
+    "check": "npm run smoke && npm run build && node --check src/app.js"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.3",

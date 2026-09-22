@@ -5,6 +5,6 @@ const config: CapacitorConfig = {
   appName: 'RJP Stream',
   webDir: 'dist',
   server: { androidScheme: 'https' },
-  android: { allowMixedContent: false }
+  android: { allowMixedContent: true }
 };
 export default config;

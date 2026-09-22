@@ -1,0 +1,13 @@
+{
+  "id": "pt.rjp.stream",
+  "version": "1.2.0",
+  "vendor": "RJP",
+  "type": "web",
+  "main": "index.html",
+  "title": "RJP Stream",
+  "icon": "assets/icons/icon-192.png",
+  "largeIcon": "assets/icons/icon-512.png",
+  "bgColor": "#06111f",
+  "transparent": false,
+  "resolution": "1920x1080"
+}

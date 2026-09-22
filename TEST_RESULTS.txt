@@ -1,0 +1,15 @@
+RJP Stream V1.1 — validações locais
+Data: 2026-09-19
+
+PASS node --check src/app.js
+PASS node --check scripts/patch-android.mjs
+PASS node scripts/smoke.mjs
+PASS node scripts/build.mjs
+PASS node scripts/build-tv.mjs
+PASS JSON: package/manifest/webOS/Apps Script
+PASS XML: Tizen config
+PASS patch Android executado 2x em skeleton (idempotência)
+PASS versionName 1.1.0 / versionCode 10100 no patch
+PASS plugins RJPVpn/RJPHttp gerados uma única vez
+
+O APK/AAB final requer o GitHub Actions para descarregar dependências externas e executar Gradle.
