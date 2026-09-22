@@ -1,4 +1,4 @@
-name: Build RJP Stream Android Debug
+name: Build RJP Stream V1.1 Android
 on:
   workflow_dispatch:
   push:
@@ -6,6 +6,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,17 +16,29 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - run: npm install --include=dev
-      - run: npm run smoke
-      - run: npm run build
-      - run: npx tsc --version
-      - run: npx cap add android
-      - run: npx cap sync android
-      - run: node scripts/patch-android.mjs
-      - name: Build APK
+      - name: Tool versions
+        run: |
+          node --version
+          npm --version
+          java -version
+      - name: Install dependencies
+        run: npm install --include=dev --no-audit --no-fund
+      - name: Validate web app
+        run: npm run check
+      - name: Create Android project
+        run: |
+          if [ ! -d android ]; then npx cap add android; fi
+      - name: Sync Capacitor
+        run: npx cap sync android
+      - name: Apply RJP Android/TV/VPN patch
+        run: node scripts/patch-android.mjs
+      - name: Build APK and AAB
         working-directory: android
-        run: ./gradlew assembleDebug
+        run: chmod +x gradlew && ./gradlew assembleDebug bundleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: RJP-Stream-V0.3.1-Android-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: RJP-Stream-V1.1-Android
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/bundle/debug/app-debug.aab
+          if-no-files-found: error
