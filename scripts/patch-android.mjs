@@ -19,6 +19,9 @@ if(!s.includes('android.software.leanback')){
 if(!s.includes('android:banner="@drawable/rjp_stream_banner"')){
   s=s.replace('<application', '<application android:banner="@drawable/rjp_stream_banner"');
 }
+if(!s.includes('android:usesCleartextTraffic=')){
+  s=s.replace('<application', '<application android:usesCleartextTraffic="true"');
+}
 if(!s.includes('android.intent.category.LEANBACK_LAUNCHER')){
   s=s.replace('</activity>', `    <intent-filter>\n        <action android:name="android.intent.action.MAIN" />\n        <category android:name="android.intent.category.LEANBACK_LAUNCHER" />\n    </intent-filter>\n</activity>`);
 }
@@ -27,12 +30,31 @@ fs.writeFileSync(manifest,s);
 const drawable='android/app/src/main/res/drawable-nodpi';
 fs.mkdirSync(drawable,{recursive:true});
 fs.copyFileSync('assets/android-tv-banner.png',path.join(drawable,'rjp_stream_banner.png'));
-const densities={mdpi:48,hdpi:72,xhdpi:96,xxhdpi:144,xxxhdpi:192};
-for(const [density,size] of Object.entries(densities)){
-  const dir=`android/app/src/main/res/mipmap-${density}`;
-  fs.mkdirSync(dir,{recursive:true});
-  const src=`assets/icons/icon-${size}.png`;
-  if(fs.existsSync(src)) fs.copyFileSync(src,path.join(dir,'ic_launcher.png'));
+
+// IconKitchen: adaptive + legacy Android icons supplied by the user.
+const iconKitchen='assets/icon-kitchen/android/res';
+if(fs.existsSync(iconKitchen)){
+  fs.cpSync(iconKitchen,'android/app/src/main/res',{recursive:true});
+  // Capacitor may reference ic_launcher_round as well; reuse the same artwork.
+  for(const density of ['mdpi','hdpi','xhdpi','xxhdpi','xxxhdpi']){
+    const dir=`android/app/src/main/res/mipmap-${density}`;
+    const launcher=path.join(dir,'ic_launcher.png');
+    if(fs.existsSync(launcher)) fs.copyFileSync(launcher,path.join(dir,'ic_launcher_round.png'));
+  }
+  const anydpi='android/app/src/main/res/mipmap-anydpi-v26';
+  const adaptive=path.join(anydpi,'ic_launcher.xml');
+  if(fs.existsSync(adaptive)) fs.copyFileSync(adaptive,path.join(anydpi,'ic_launcher_round.xml'));
+} else {
+  const densities={mdpi:48,hdpi:72,xhdpi:96,xxhdpi:144,xxxhdpi:192};
+  for(const [density,size] of Object.entries(densities)){
+    const dir=`android/app/src/main/res/mipmap-${density}`;
+    fs.mkdirSync(dir,{recursive:true});
+    const src=`assets/icons/icon-${size}.png`;
+    if(fs.existsSync(src)){
+      fs.copyFileSync(src,path.join(dir,'ic_launcher.png'));
+      fs.copyFileSync(src,path.join(dir,'ic_launcher_round.png'));
+    }
+  }
 }
 
 // WireGuard embeddable tunnel library. This version is available from Maven Central.
@@ -40,9 +62,11 @@ const appGradle='android/app/build.gradle';
 let gradle=fs.readFileSync(appGradle,'utf8');
 const wgDep=`implementation 'com.wireguard.android:tunnel:1.0.20260102'`;
 if(!gradle.includes('com.wireguard.android:tunnel')){
-  gradle=gradle.replace(/dependencies\s*\{/, m=>`${m}\n    ${wgDep}`);
-  fs.writeFileSync(appGradle,gradle);
+  gradle=gradle.replace(/dependencies\s*\{/, m=>`${m}\n    ${wgDep}\n`);
 }
+gradle=gradle.replace(/versionCode\s+\d+/, 'versionCode 10200');
+gradle=gradle.replace(/versionName\s+["'][^"']+["']/, 'versionName "1.2.0"');
+fs.writeFileSync(appGradle,gradle);
 
 // WireGuard 1.0.20260102 requires API 24+.
 const vars='android/variables.gradle';
@@ -54,16 +78,20 @@ if(fs.existsSync(vars)){
 
 const mainActivity=path.join(javaDir,'MainActivity.java');
 let main=fs.existsSync(mainActivity)?fs.readFileSync(mainActivity,'utf8'):`package ${pkg};\n\nimport com.getcapacitor.BridgeActivity;\n\npublic class MainActivity extends BridgeActivity {}\n`;
-if(!main.includes('registerPlugin(RJPVpnPlugin.class)')){
+if(!main.includes('registerPlugin(RJPVpnPlugin.class)') || !main.includes('registerPlugin(RJPHttpPlugin.class)')){
   if(!main.includes('import android.os.Bundle;')) main=main.replace(`package ${pkg};`, `package ${pkg};\n\nimport android.os.Bundle;`);
   if(main.includes('public class MainActivity extends BridgeActivity {}')){
     main=main.replace('public class MainActivity extends BridgeActivity {}', `public class MainActivity extends BridgeActivity {\n    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        registerPlugin(RJPVpnPlugin.class);\n        super.onCreate(savedInstanceState);\n    }\n}`);
   } else if(main.includes('public class MainActivity extends BridgeActivity {') && !main.includes('void onCreate(')){
     main=main.replace('public class MainActivity extends BridgeActivity {', `public class MainActivity extends BridgeActivity {\n    @Override\n    public void onCreate(Bundle savedInstanceState) {\n        registerPlugin(RJPVpnPlugin.class);\n        super.onCreate(savedInstanceState);\n    }`);
   } else if(main.includes('void onCreate(')){
-    main=main.replace(/(void\s+onCreate\s*\([^)]*\)\s*\{)/, '$1\n        registerPlugin(RJPVpnPlugin.class);');
+    main=main.replace(/(void\s+onCreate\s*\([^)]*\)\s*\{)/, '$1\n        registerPlugin(RJPVpnPlugin.class);\n        registerPlugin(RJPHttpPlugin.class);');
   }
-  fs.writeFileSync(mainActivity,main);
+  // Ensure both custom plugins are registered exactly once.
+main=main.replace(/(registerPlugin\(RJPVpnPlugin\.class\);\s*)+/g,'registerPlugin(RJPVpnPlugin.class);\n        ');
+main=main.replace(/(registerPlugin\(RJPHttpPlugin\.class\);\s*)+/g,'registerPlugin(RJPHttpPlugin.class);\n        ');
+if(main.includes('void onCreate(') && !main.includes('registerPlugin(RJPHttpPlugin.class)')) main=main.replace(/(void\s+onCreate\s*\([^)]*\)\s*\{)/, '$1\n        registerPlugin(RJPHttpPlugin.class);');
+fs.writeFileSync(mainActivity,main);
 }
 
 const plugin=`package ${pkg};
@@ -280,4 +308,70 @@ public class RJPVpnPlugin extends Plugin {
 `;
 fs.writeFileSync(path.join(javaDir,'RJPVpnPlugin.java'),plugin);
 
-console.log('Android preparado: telemóvel/tablet/TV + ícones/banner + plugin WireGuard nativo RJPVpn.');
+const httpPlugin=`package ${pkg};
+
+import com.getcapacitor.JSObject;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
+
+@CapacitorPlugin(name = "RJPHttp")
+public class RJPHttpPlugin extends Plugin {
+    @PluginMethod
+    public void request(PluginCall call) {
+        final String url = call.getString("url");
+        final String method = call.getString("method", "GET").toUpperCase();
+        final String body = call.getString("body", "");
+        final JSObject headers = call.getObject("headers", new JSObject());
+        if (url == null || !(url.startsWith("https://") || url.startsWith("http://"))) {
+            call.reject("URL http/https inválida."); return;
+        }
+        new Thread(() -> {
+            HttpURLConnection conn = null;
+            try {
+                conn = (HttpURLConnection) new URL(url).openConnection();
+                conn.setInstanceFollowRedirects(true);
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(20000);
+                conn.setRequestMethod(method);
+                conn.setRequestProperty("User-Agent", "RJPStream/1.1 Android");
+                Iterator<String> keys = headers.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    Object value = headers.opt(key);
+                    if (value != null) conn.setRequestProperty(key, String.valueOf(value));
+                }
+                if (("POST".equals(method) || "PUT".equals(method) || "PATCH".equals(method)) && body != null) {
+                    conn.setDoOutput(true);
+                    byte[] data = body.getBytes(StandardCharsets.UTF_8);
+                    try (OutputStream os = conn.getOutputStream()) { os.write(data); }
+                }
+                int status = conn.getResponseCode();
+                InputStream in = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
+                StringBuilder text = new StringBuilder();
+                if (in != null) {
+                    try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                        String line; while ((line = r.readLine()) != null) text.append(line).append('\n');
+                    }
+                }
+                JSObject out = new JSObject(); out.put("status", status); out.put("body", text.toString());
+                call.resolve(out);
+            } catch (Exception e) { call.reject("HTTP nativo: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()), e); }
+            finally { if (conn != null) conn.disconnect(); }
+        }).start();
+    }
+}
+`;
+fs.writeFileSync(path.join(javaDir,'RJPHttpPlugin.java'),httpPlugin);
+
+console.log('RJP Stream V1.1 Android preparado: telemóvel/tablet/TV + IconKitchen + banner + WireGuard + HTTP nativos.');

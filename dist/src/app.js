@@ -1,9 +1,9 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-const APP_VERSION = '0.3.1';
-const STORAGE_KEY = 'rjpStreamStateV3';
-const LEGACY_KEYS = ['rjpStreamStateV2','rjpStreamState'];
+const APP_VERSION = '1.2.0';
+const STORAGE_KEY = 'rjpStreamStateV12';
+const LEGACY_KEYS = ['rjpStreamStateV11','rjpStreamStateV10','rjpStreamStateV3','rjpStreamStateV2','rjpStreamState'];
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const GIS_URL = 'https://accounts.google.com/gsi/client';
 const HLS_JS_URL = 'https://cdn.jsdelivr.net/npm/hls.js@1.7.2/dist/hls.min.js';
@@ -28,15 +28,23 @@ const defaultState = {
   vpn: false,
   vpnSplitOnly: true,
   sources: [],
+  webProviders: [],
   epg: null,
   wireguard: null,
-  favorites: ['Nova Era'],
+  favorites: [],
+  favoriteItems: [],
+  history: [],
+  footballGames: [],
   layout: 'auto',
   channelSearch: '',
   sourceSearch: '',
+  autoRefreshMinutes: 60,
+  lastAutoRefresh: null,
   drive: {
     clientId: '',
     folderName: 'RJP Stream',
+    bridgeUrl: '',
+    bridgeToken: '',
     connected: false,
     account: '',
     lastSync: null,
@@ -73,6 +81,9 @@ function migrateLegacy(old){
   return {
     ...old,
     vpnSplitOnly: old.vpnSplitOnly ?? true,
+    autoRefreshMinutes: Number.isFinite(+old.autoRefreshMinutes) ? +old.autoRefreshMinutes : 60,
+    history: Array.isArray(old.history) ? old.history.slice(0,100) : [],
+    webProviders: Array.isArray(old.webProviders) ? old.webProviders : [],
     drive: {
       ...defaultState.drive,
       ...(old.drive || {}),
@@ -145,23 +156,51 @@ function renderPage(){
 
 function homePage(){
   const stats = sourceStats();
+  const items = activeItems();
+  const recent = recentHistoryItems(8);
+  const favs = (state.favoriteItems||[]).slice(0,8);
+  const hero = recent[0] || favs[0] || items[0] || null;
+  const groups=[...new Set(items.map(x=>x.group).filter(Boolean))].slice(0,7);
+  const heroHtml = hero ? `
+      <div class="hero-copy"><div class="eyebrow">PRONTO A REPRODUZIR</div><h2>${escapeHtml(hero.name||'Stream')}</h2><p>${escapeHtml(hero.group||hero.type||'Da tua biblioteca')}</p><div class="hero-actions"><button class="btn primary" data-stream="${encodeURIComponent(hero.url||'')}" data-stream-type="${escapeHtml(hero.type||detectStreamType(hero.url||''))}" data-stream-name="${escapeHtml(hero.name||'Stream')}" data-stream-group="${escapeHtml(hero.group||'')}" data-stream-logo="${escapeHtml(hero.logo||'')}">▶ Ver agora</button><button class="btn" data-nav="fontes">＋ Gerir fontes</button></div></div>` : `
+      <div class="hero-copy"><div class="eyebrow">RJP STREAM</div><h2>A tua biblioteca, num só lugar</h2><p>Adiciona uma fonte M3U/M3U8, HLS, DASH, JSON/RJP Bundle ou sincroniza o Google Drive para começar.</p><div class="hero-actions"><button class="btn primary" data-nav="fontes">＋ Adicionar fonte</button><button class="btn" data-nav="definicoes">⚙ Configurar</button></div></div>`;
   return `
     <div class="hero">
-      <div class="hero-main">
-        <div class="hero-copy"><div class="eyebrow">EM DESTAQUE</div><h2>Além do Horizonte</h2><p>A RJP Stream adapta automaticamente a interface ao telemóvel, tablet e televisão, mantendo o mesmo projeto-base.</p><div class="hero-actions"><button class="btn primary" data-demo-play>▶ Ver agora</button><button class="btn" data-nav="fontes">＋ Adicionar fonte</button></div></div>
-      </div>
+      <div class="hero-main">${heroHtml}</div>
       <div class="hero-side">
         <div class="panel"><h3>Futebol</h3><div class="live-score"><span class="live-badge">GUIA</span><div class="score">Onde ver</div><small>Broadcasters oficiais por região</small></div><button class="btn primary full" data-nav="futebol">Abrir futebol</button></div>
         <div class="panel"><h3>Minhas Fontes</h3><div class="kpi-grid two"><div class="kpi"><b>${stats.sources}</b><small>Fontes</small></div><div class="kpi"><b>${stats.items}</b><small>Itens</small></div></div><button class="btn full" data-nav="fontes">Gerir fontes</button></div>
       </div>
     </div>
-    ${mediaSection('Continuar a ver', demoCards, true)}
-    ${mediaSection('Em destaque', featured.map(x=>[x[0],x[1],null]), false)}
-    <div class="section"><div class="section-head"><div><h2>TV ao vivo</h2><div class="sub">Categorias rápidas</div></div></div><div class="category-grid">${['📺 Todos os canais','📰 Notícias','⚽ Desporto','♡ Entretenimento','🧸 Infantil','🌿 Documentários','♫ Música'].map(x=>`<button class="cat"><span>${x.split(' ')[0]}</span><span>${x.substring(x.indexOf(' ')+1)}</span></button>`).join('')}</div></div>`;
+    ${recent.length ? streamSection('Recentemente reproduzidos',recent,'O histórico é guardado apenas neste dispositivo.') : ''}
+    ${favs.length ? streamSection('Favoritos',favs,'Acesso rápido aos teus canais e streams guardados.') : ''}
+    ${items.length ? streamSection('Da tua biblioteca',items.slice(0,12),'Conteúdo das fontes ativas.') : onboardingSection()}
+    <div class="section"><div class="section-head"><div><h2>TV ao vivo</h2><div class="sub">Categorias das tuas fontes</div></div></div><div class="category-grid">${(groups.length?groups:['Todos os canais']).map(label=>`<button class="cat" data-home-group="${escapeHtml(label==='Todos os canais'?'':label)}"><span>📺</span><span>${escapeHtml(label)}</span></button>`).join('')}</div></div>`;
 }
 
-function mediaSection(title, cards, progress){
-  return `<div class="section"><div class="section-head"><div><h2>${title}</h2><div class="sub">Conteúdo de demonstração</div></div><button class="btn">Ver todos</button></div><div class="cards">${cards.map(([name,meta,p],i)=>`<article class="media-card" tabindex="0" style="background:linear-gradient(${130+i*13}deg,#${['123258','1b2d43','143a43','26264d','2b2840','173653'][i%6]},#08131f)"><strong>${name}</strong><small>${meta}</small>${progress?`<div class="progress"><i style="width:${p}%"></i></div>`:''}</article>`).join('')}</div></div>`;
+function onboardingSection(){
+  return `<div class="section panel onboarding"><div class="section-head"><div><h2>Começar</h2><div class="sub">Ainda não existem itens ativos.</div></div></div><div class="source-actions compact-actions"><button class="source-action" data-nav="fontes"><span class="bigicon">📄</span><b>Adicionar fontes</b><small>M3U, HLS, DASH, JSON ou URL</small></button><button class="source-action" id="homeDriveSetup"><span class="bigicon">☁</span><b>Google Drive</b><small>Sincronizar a pasta RJP Stream</small></button></div></div>`;
+}
+
+function streamSection(title, items, subtitle=''){
+  const cards=items.slice(0,12).map(x=>streamCard(x)).join('');
+  return `<div class="section"><div class="section-head"><div><h2>${escapeHtml(title)}</h2><div class="sub">${escapeHtml(subtitle)}</div></div></div><div class="cards">${cards}</div></div>`;
+}
+
+function streamCard(x){
+  const url=x.url||''; const epg=epgForItem(x); const logo=x.logo||epg?.channel?.logo||'';
+  const rec=(state.history||[]).find(h=>h.url===url);
+  const pct=rec?.duration>0 && Number.isFinite(rec.duration) ? Math.max(0,Math.min(100,(rec.position/rec.duration)*100)) : 0;
+  const isFav=url && state.favoriteItems.some(f=>f.url===url);
+  return `<article class="media-card channel-card ${epg?.now?'has-epg':''}" tabindex="0" data-stream="${encodeURIComponent(url)}" data-stream-type="${escapeHtml(x.type||detectStreamType(url))}" data-stream-name="${escapeHtml(x.name||'Stream')}" data-stream-group="${escapeHtml(x.group||'')}" data-stream-logo="${escapeHtml(logo)}">${url?`<button class="fav-btn ${isFav?'on':''}" data-fav-url="${encodeURIComponent(url)}" data-fav-name="${escapeHtml(x.name||'Stream')}" data-fav-type="${escapeHtml(x.type||detectStreamType(url))}" data-fav-group="${escapeHtml(x.group||'')}" data-fav-logo="${escapeHtml(logo)}" title="Favorito">${isFav?'★':'☆'}</button>`:''}${logo?`<img class="channel-logo" src="${escapeHtml(logo)}" alt="" referrerpolicy="no-referrer">`:''}<strong>${escapeHtml(x.name||'Stream')}</strong><small>${escapeHtml(epg?.now?.title||x.group||x.type||'')}</small>${pct>1&&pct<99?`<div class="progress"><i style="width:${pct.toFixed(1)}%"></i></div>`:''}</article>`;
+}
+
+function recentHistoryItems(limit=12){
+  return (state.history||[]).slice().sort((a,b)=>new Date(b.lastPlayed||0)-new Date(a.lastPlayed||0)).filter(x=>x.url).slice(0,limit);
+}
+
+function mediaSection(title, cards, progress, target='filmes'){
+  return `<div class="section"><div class="section-head"><div><h2>${title}</h2><div class="sub">Conteúdo de demonstração</div></div><button class="btn" data-nav="${target}">Ver todos</button></div><div class="cards">${cards.map(([name,meta,p],i)=>`<article class="media-card" tabindex="0" data-demo-card="${escapeHtml(name)}" style="background:linear-gradient(${130+i*13}deg,#${['123258','1b2d43','143a43','26264d','2b2840','173653'][i%6]},#08131f)"><strong>${name}</strong><small>${meta}</small>${progress?`<div class="progress"><i style="width:${p}%"></i></div>`:''}</article>`).join('')}</div></div>`;
 }
 
 function activeItems(){ return state.sources.filter(s=>s.enabled!==false).flatMap(s=>s.items || []); }
@@ -189,7 +228,8 @@ function libraryPage(title, icon, cats){
       const url=sourceMode?x.url||'':'';
       const logo=sourceMode?(x.logo||epg?.channel?.logo||''):'';
       const epgHtml=epg?.now?`<div class="epg-now">Agora: ${escapeHtml(epg.now.title)}${epg.next?.title?`<span>Depois: ${escapeHtml(epg.next.title)}</span>`:''}</div><div class="epg-progress"><i style="width:${epg.progress.toFixed(1)}%"></i></div>`:'';
-      return `<article class="media-card channel-card ${epg?.now?'has-epg':''}" tabindex="0" ${url?`data-stream="${encodeURIComponent(url)}" data-stream-type="${escapeHtml(x.type||detectStreamType(url))}"`:''}>${logo?`<img class="channel-logo" src="${escapeHtml(logo)}" alt="" referrerpolicy="no-referrer">`:''}<strong>${escapeHtml(n)}</strong><small>${escapeHtml(m)}</small>${epgHtml}${x.tvgId?`<span class="micro tvg-id">${escapeHtml(x.tvgId)}</span>`:''}</article>`;
+      const isFav=url && state.favoriteItems.some(f=>f.url===url);
+      return `<article class="media-card channel-card ${epg?.now?'has-epg':''}" tabindex="0" ${url?`data-stream="${encodeURIComponent(url)}" data-stream-type="${escapeHtml(x.type||detectStreamType(url))}" data-stream-name="${escapeHtml(n)}" data-stream-group="${escapeHtml(m)}" data-stream-logo="${escapeHtml(logo)}"`:''}>${url?`<button class="fav-btn ${isFav?'on':''}" data-fav-url="${encodeURIComponent(url)}" data-fav-name="${escapeHtml(n)}" data-fav-type="${escapeHtml(x.type||detectStreamType(url))}" data-fav-group="${escapeHtml(m)}" data-fav-logo="${escapeHtml(logo)}" title="Favorito">${isFav?'★':'☆'}</button>`:''}${logo?`<img class="channel-logo" src="${escapeHtml(logo)}" alt="" referrerpolicy="no-referrer">`:''}<strong>${escapeHtml(n)}</strong><small>${escapeHtml(m)}</small>${epgHtml}${x.tvgId?`<span class="micro tvg-id">${escapeHtml(x.tvgId)}</span>`:''}</article>`;
     }).join('')}</div></div>`;
 }
 
@@ -199,12 +239,13 @@ function sourcesPage(){
   const visibleSources = q ? state.sources.filter(s=>normalizeText(`${s.name} ${s.type} ${s.origin}`).includes(q)) : state.sources;
   return `
   <div class="panel">
-    <div class="section-head"><div><h2>Minhas Fontes</h2><div class="sub">M3U/M3U8, HLS, DASH, JSON/RJP Bundle, EPG e Google Drive.</div></div><div class="button-row"><button class="btn" id="refreshAll">↻ Atualizar</button><button class="btn primary" id="addUrl">＋ Adicionar URL</button></div></div>
+    <div class="section-head"><div><h2>Minhas Fontes</h2><div class="sub">M3U/M3U8, HLS, DASH, JSON/RJP Bundle, EPG, Google Drive e atalhos Web personalizados.</div></div><div class="button-row"><button class="btn" id="refreshAll">↻ Atualizar</button><button class="btn primary" id="addUrl">＋ Adicionar URL</button></div></div>
     <div class="source-actions">
       <button class="source-action" id="importM3U"><span class="bigicon">📄</span><b>Importar M3U</b><small>Ficheiro .m3u ou .m3u8</small></button>
       <button class="source-action" id="addDirect"><span class="bigicon">🔗</span><b>URL / HLS / DASH</b><small>Stream ou playlist remota</small></button>
       <button class="source-action" id="importBundle"><span class="bigicon">🧩</span><b>RJP Bundle / JSON</b><small>Catálogos e listas JSON</small></button>
       <button class="source-action" id="importEpg"><span class="bigicon">🗓</span><b>EPG / XMLTV</b><small>Guia de programação</small></button>
+      <button class="source-action" id="addWebProvider"><span class="bigicon">🌐</span><b>Atalho Web</b><small>Adicionar manualmente um portal/serviço</small></button>
       <button class="source-action" id="driveSetup"><span class="bigicon">☁</span><b>Google Drive</b><small>${state.drive.connected?'Ligado · sincronizar':'Ler pasta RJP Stream'}</small></button>
       <button class="source-action" id="backupMenu"><span class="bigicon">💾</span><b>Backup</b><small>Exportar/importar configuração</small></button>
     </div>
@@ -212,31 +253,67 @@ function sourcesPage(){
   </div>
   <div class="section"><div class="section-head"><div><h2>Fontes</h2><div class="sub">Ativar, atualizar, editar ou remover sem reinstalar a app.</div></div></div>
     <div class="searchbar"><input id="sourceSearch" value="${escapeHtml(state.sourceSearch)}" placeholder="Pesquisar fonte…"><button class="btn" id="clearSourceSearch">Limpar</button></div>
-    <div class="list">${visibleSources.length?visibleSources.map(sourceRow).join(''):'<div class="panel empty"><p>Ainda não existem fontes. Usa uma das opções acima.</p></div>'}</div></div>`;
+    <div class="list">${visibleSources.length?visibleSources.map(sourceRow).join(''):'<div class="panel empty"><p>Ainda não existem fontes. Usa uma das opções acima.</p></div>'}</div></div>
+  <div class="section"><div class="section-head"><div><h2>Atalhos Web pessoais</h2><div class="sub">Links adicionados manualmente por ti. A RJP Stream não os descobre nem valida como fornecedores de conteúdo.</div></div><button class="btn" id="addWebProvider2">＋ Adicionar</button></div>
+    <div class="list">${(state.webProviders||[]).length?(state.webProviders||[]).map(webProviderRow).join(''):'<div class="panel empty"><p>Sem atalhos Web. Podes adicionar um nome e uma URL manualmente.</p></div>'}</div></div>`;
 }
 
 function sourceRow(s){
   const last = s.lastSync ? new Date(s.lastSync).toLocaleString('pt-PT') : 'Nunca';
-  return `<div class="list-row source-row"><div class="source-symbol">${s.type==='M3U'?'📺':s.type==='JSON'?'🧩':s.originType==='drive'?'☁':'🔗'}</div><div><b>${escapeHtml(s.name)}</b><div class="meta">${escapeHtml(s.type)} · ${s.items?.length||1} item(ns) · ${escapeHtml(shortOrigin(s.origin||'Local'))}</div><div class="micro">Última atualização: ${escapeHtml(last)} ${s.lastStatus?`· ${escapeHtml(s.lastStatus)}`:''}</div></div><div class="row-actions"><button class="icon-btn" data-refresh-source="${s.id}" title="Atualizar">↻</button><button class="toggle ${s.enabled!==false?'on':''}" data-toggle-source="${s.id}" aria-label="Ativar/desativar"><i></i></button><button class="icon-btn" data-delete-source="${s.id}" title="Remover">✕</button></div></div>`;
+  return `<div class="list-row source-row"><div class="source-symbol">${s.type==='M3U'?'📺':s.type==='JSON'?'🧩':s.originType==='drive'?'☁':'🔗'}</div><div><b>${escapeHtml(s.name)}</b><div class="meta">${escapeHtml(s.type)} · ${s.items?.length||1} item(ns) · ${escapeHtml(shortOrigin(s.origin||'Local'))}</div><div class="micro">Última atualização: ${escapeHtml(last)} ${s.lastStatus?`· ${escapeHtml(s.lastStatus)}`:''}</div></div><div class="row-actions"><button class="icon-btn" data-edit-source="${s.id}" title="Editar">✎</button><button class="icon-btn" data-refresh-source="${s.id}" title="Atualizar">↻</button><button class="toggle ${s.enabled!==false?'on':''}" data-toggle-source="${s.id}" aria-label="Ativar/desativar"><i></i></button><button class="icon-btn" data-delete-source="${s.id}" title="Remover">✕</button></div></div>`;
+}
+
+function webProviderRow(p){
+  const last=p.addedAt?new Date(p.addedAt).toLocaleDateString('pt-PT'):'—';
+  return `<div class="list-row source-row"><div class="source-symbol">🌐</div><div><b>${escapeHtml(p.name||'Atalho Web')}</b><div class="meta">WEB · ${escapeHtml(shortOrigin(p.url||''))}</div><div class="micro">Adicionado: ${escapeHtml(last)}</div></div><div class="row-actions"><button class="icon-btn" data-open-web-provider="${p.id}" title="Abrir">↗</button><button class="icon-btn" data-edit-web-provider="${p.id}" title="Editar">✎</button><button class="icon-btn" data-delete-web-provider="${p.id}" title="Remover">✕</button></div></div>`;
+}
+
+function webProviderModal(id=''){
+  const existing=(state.webProviders||[]).find(x=>x.id===id) || null;
+  modal(`<div class="modal-head"><h3>${existing?'Editar':'Adicionar'} atalho Web</h3><button class="icon-btn" data-close>✕</button></div><div class="field"><label>Nome</label><input id="webProviderName" value="${escapeHtml(existing?.name||'')}" placeholder="Ex.: Portal pessoal"></div><div class="field top-gap"><label>URL</label><input id="webProviderUrl" value="${escapeHtml(existing?.url||'')}" placeholder="https://..."></div><div class="note top-gap">Este campo guarda apenas um atalho introduzido manualmente. Não existe descoberta automática, extração de streams, bypass de DRM ou autenticação.</div><button class="btn primary top-gap" id="saveWebProvider">Guardar</button>`);
+  $('#saveWebProvider').addEventListener('click',()=>{
+    const name=$('#webProviderName').value.trim()||'Atalho Web';
+    const url=$('#webProviderUrl').value.trim();
+    if(!/^https?:\/\//i.test(url)) return toast('Introduz uma URL http/https válida.');
+    state.webProviders=state.webProviders||[];
+    if(existing) Object.assign(existing,{name,url});
+    else state.webProviders.push({id:randomId(),name,url,addedAt:new Date().toISOString()});
+    save();closeModal();layout();toast('Atalho Web guardado.');
+  });
+}
+
+function openWebProvider(id){
+  const p=(state.webProviders||[]).find(x=>x.id===id); if(!p?.url) return;
+  window.open(p.url,'_blank','noopener,noreferrer');
+}
+
+function deleteWebProvider(id){
+  const p=(state.webProviders||[]).find(x=>x.id===id); if(!p) return;
+  modal(`<div class="modal-head"><h3>Remover atalho</h3><button class="icon-btn" data-close>✕</button></div><p>Queres remover <b>${escapeHtml(p.name||'Atalho Web')}</b>?</p><div class="button-row"><button class="btn danger" id="confirmDeleteWebProvider">Remover</button><button class="btn" data-close>Cancelar</button></div>`);
+  $('#confirmDeleteWebProvider').addEventListener('click',()=>{state.webProviders=(state.webProviders||[]).filter(x=>x.id!==id);save();closeModal();layout();});
 }
 
 function footballPage(){
-  return `<div class="hero football-hero"><div class="hero-main short"><div class="hero-copy"><div class="eyebrow">FUTEBOL</div><h2>Onde ver</h2><p>Área preparada para apresentar jogos e broadcasters oficiais por país/região, num só ecrã.</p><div class="hero-actions"><button class="btn primary">⚽ Jogos de hoje</button><button class="btn">☆ Favoritar competição</button></div></div></div><div class="panel"><h3>Jogo em destaque</h3><div class="live-score"><span class="live-badge">EXEMPLO</span><div class="score">FCX 2 - 1 RSC</div><small>Liga Europeia · 72'</small></div></div></div>
-  <div class="panel"><div class="section-head"><div><h2>Broadcasters por região</h2><div class="sub">Exemplo visual. Os direitos de transmissão devem ser confirmados nas fontes oficiais.</div></div></div><div class="country-list">
-    ${[['🇵🇹 Portugal','Sport TV 1'],['🇫🇷 França','Canal+ Sport'],['🇧🇷 Brasil','ESPN'],['🇪🇸 Espanha','Movistar+'],['🇩🇪 Alemanha','DAZN']].map(([c,ch])=>`<div class="country"><b>${c}</b><span class="channel">${ch}</span><span class="pill">HD</span></div>`).join('')}
-  </div><div class="note top-gap">A app não inclui pesquisa automática de fontes não autorizadas, bypass de DRM ou extração de credenciais. O Gestor de Fontes continua genérico para conteúdos a que tenhas direito de acesso.</div></div>`;
+  const games=(state.footballGames||[]).slice().sort((a,b)=>new Date(a.kickoff||0)-new Date(b.kickoff||0));
+  const cards=games.length?games.map((g,i)=>{
+    const when=g.kickoff?new Date(g.kickoff).toLocaleString('pt-PT',{dateStyle:'short',timeStyle:'short'}):'Hora por definir';
+    const bc=(g.broadcasters||[]).map((b,j)=>`<button class="country broadcaster" data-broadcaster-url="${escapeHtml(b.url||'')}" ${b.url?'':'disabled'}><b>${escapeHtml((b.flag?b.flag+' ':'')+(b.country||'Região'))}</b><span class="channel">${escapeHtml(b.name||b.channel||'—')}</span><span class="pill">${escapeHtml(b.quality||'TV')}</span></button>`).join('');
+    return `<div class="panel game-card"><div class="section-head"><div><div class="eyebrow">${escapeHtml(g.competition||'FUTEBOL')}</div><h2>${escapeHtml(g.home||'Casa')} × ${escapeHtml(g.away||'Fora')}</h2><div class="sub">${escapeHtml(when)}${g.venue?` · ${escapeHtml(g.venue)}`:''}</div></div><span class="pill ${g.status==='live'?'on':''}">${g.status==='live'?'AO VIVO':'AGENDADO'}</span></div><div class="country-list">${bc||'<div class="note">Sem broadcasters adicionados para este jogo.</div>'}</div></div>`;
+  }).join(''):`<div class="panel empty"><h2>⚽ Guia de futebol</h2><p class="muted">Ainda não há jogos carregados. Importa um guia JSON local ou coloca <code>footballGames</code> em <code>config/rjp-stream.json</code> no Google Drive.</p></div>`;
+  return `<div class="hero football-hero"><div class="hero-main short"><div class="hero-copy"><div class="eyebrow">FUTEBOL</div><h2>Onde ver</h2><p>Guia de jogos e broadcasters por país/região. Os dados podem vir do teu Drive ou de um ficheiro JSON.</p><div class="hero-actions"><button class="btn primary" id="importFootballGuide">⬆ Importar guia</button><button class="btn" id="footballExample">Ver formato JSON</button></div></div></div><div class="panel"><h3>Resumo</h3><div class="kpi-grid two"><div class="kpi"><b>${games.length}</b><small>Jogos</small></div><div class="kpi"><b>${games.reduce((n,g)=>n+(g.broadcasters?.length||0),0)}</b><small>Broadcasters</small></div></div></div></div><div class="section"><div class="section-head"><div><h2>Jogos</h2><div class="sub">Os direitos de transmissão variam por território; confirma sempre no broadcaster oficial.</div></div></div><div class="list football-list">${cards}</div></div>`;
 }
 
 function favoritesPage(){
-  return `<div class="panel"><div class="section-head"><div><h2>♡ Favoritos</h2><div class="sub">Guardados neste dispositivo.</div></div></div>${mediaSection('A tua lista', (state.favorites.length?state.favorites:['Ainda sem favoritos']).map((x,i)=>[x,i?'Filme':'Série',null]), false)}</div>`;
+  const favs=state.favoriteItems||[];
+  return `<div class="section-head"><div><h2>♡ Favoritos</h2><div class="sub">Guardados neste dispositivo.</div></div></div>${favs.length?`<div class="cards">${favs.map(streamCard).join('')}</div>`:'<div class="panel empty"><p>Ainda não guardaste canais/streams favoritos.</p></div>'}`;
 }
 
 function settingsPage(){
   const p = deviceProfile();
   return `<div class="kpi-grid"><div class="kpi"><b>${p.label}</b><small>Layout detetado</small></div><div class="kpi"><b>${window.innerWidth}×${window.innerHeight}</b><small>Área útil CSS</small></div><div class="kpi"><b>${window.devicePixelRatio || 1}×</b><small>Densidade de píxeis</small></div><div class="kpi"><b>${APP_VERSION}</b><small>Versão</small></div></div>
-  <div class="section panel"><h2 class="panel-title">Interface</h2><div class="form-grid"><div class="field"><label>Modo</label><select id="layoutMode"><option value="auto" ${state.layout==='auto'?'selected':''}>Automático</option><option value="compact" ${state.layout==='compact'?'selected':''}>Compacto</option><option value="normal" ${state.layout==='normal'?'selected':''}>Normal</option><option value="tv" ${state.layout==='tv'?'selected':''}>TV à distância</option></select></div><div class="field"><label>Pasta Google Drive</label><input id="driveFolder" value="${escapeHtml(state.drive.folderName||'RJP Stream')}" /></div></div></div>
+  <div class="section panel"><h2 class="panel-title">Interface e atualização</h2><div class="form-grid"><div class="field"><label>Modo</label><select id="layoutMode"><option value="auto" ${state.layout==='auto'?'selected':''}>Automático</option><option value="compact" ${state.layout==='compact'?'selected':''}>Compacto</option><option value="normal" ${state.layout==='normal'?'selected':''}>Normal</option><option value="tv" ${state.layout==='tv'?'selected':''}>TV à distância</option></select></div><div class="field"><label>Pasta Google Drive</label><input id="driveFolder" value="${escapeHtml(state.drive.folderName||'RJP Stream')}" /></div><div class="field"><label>Atualização automática de fontes</label><select id="autoRefresh"><option value="0" ${+state.autoRefreshMinutes===0?'selected':''}>Desativada</option><option value="15" ${+state.autoRefreshMinutes===15?'selected':''}>15 minutos</option><option value="30" ${+state.autoRefreshMinutes===30?'selected':''}>30 minutos</option><option value="60" ${+state.autoRefreshMinutes===60?'selected':''}>1 hora</option><option value="180" ${+state.autoRefreshMinutes===180?'selected':''}>3 horas</option><option value="360" ${+state.autoRefreshMinutes===360?'selected':''}>6 horas</option></select></div><div class="field"><label>Última atualização automática</label><input value="${state.lastAutoRefresh?new Date(state.lastAutoRefresh).toLocaleString('pt-PT'):'—'}" disabled></div></div></div>
   <div class="section panel"><div class="section-head"><div><h2>Google Drive</h2><div class="sub">Liga a tua própria credencial OAuth e sincroniza M3U/JSON/EPG a partir da pasta escolhida.</div></div><button class="btn ${state.drive.connected?'primary':''}" id="driveSettingsBtn">${state.drive.connected?'Sincronizar':'Configurar Drive'}</button></div><div class="status-grid"><div><span>Estado</span><b>${state.drive.connected?'Ligado':'Desligado'}</b></div><div><span>Última sync</span><b>${state.drive.lastSync?new Date(state.drive.lastSync).toLocaleString('pt-PT'):'—'}</b></div></div></div>
-  <div class="section panel"><div class="section-head"><div><h2>VPN WireGuard</h2><div class="sub">No APK Android/Android TV a V0.3.1 usa o túnel WireGuard nativo. No browser, Samsung e LG esta opção fica apenas informativa.</div></div><button class="btn ${state.vpn?'primary':''}" id="vpnToggle">${state.vpn?'Desligar':'Ligar'} VPN</button></div><div class="form-grid"><div class="field"><label>Encaminhamento</label><select id="vpnScope"><option value="app" ${state.vpnSplitOnly?'selected':''}>Só RJP Stream</option><option value="device" ${!state.vpnSplitOnly?'selected':''}>Todo o dispositivo</option></select></div><div class="field"><label>Motor</label><input value="${nativeVpnAvailable()?'WireGuard Android nativo':'Indisponível nesta plataforma'}" disabled></div></div><div class="source-actions compact-actions"><button class="source-action" id="importWG"><span class="bigicon">🛡</span><b>Importar WireGuard</b><small>${state.wireguard?escapeHtml(state.wireguard.name):'Ficheiro .conf'}</small></button><button class="source-action" id="backupMenu2"><span class="bigicon">💾</span><b>Backup</b><small>Guardar fontes e definições</small></button></div><div class="note">A configuração WireGuard é guardada cifrada pelo Android Keystore no APK. O backup web não exporta a chave privada. Samsung Tizen e LG webOS não expõem às apps comuns uma VPN de sistema equivalente ao Android VpnService.</div></div>`;
+  <div class="section panel"><div class="section-head"><div><h2>VPN WireGuard</h2><div class="sub">No APK Android/Android TV a V1.1 usa o túnel WireGuard nativo. No browser, Samsung e LG esta opção fica apenas informativa.</div></div><button class="btn ${state.vpn?'primary':''}" id="vpnToggle">${state.vpn?'Desligar':'Ligar'} VPN</button></div><div class="form-grid"><div class="field"><label>Encaminhamento</label><select id="vpnScope"><option value="app" ${state.vpnSplitOnly?'selected':''}>Só RJP Stream</option><option value="device" ${!state.vpnSplitOnly?'selected':''}>Todo o dispositivo</option></select></div><div class="field"><label>Motor</label><input value="${nativeVpnAvailable()?'WireGuard Android nativo':'Indisponível nesta plataforma'}" disabled></div></div><div class="source-actions compact-actions"><button class="source-action" id="importWG"><span class="bigicon">🛡</span><b>Importar WireGuard</b><small>${state.wireguard?escapeHtml(state.wireguard.name):'Ficheiro .conf'}</small></button><button class="source-action" id="backupMenu2"><span class="bigicon">💾</span><b>Backup</b><small>Guardar fontes e definições</small></button><button class="source-action" id="clearHistory"><span class="bigicon">🕘</span><b>Limpar histórico</b><small>${(state.history||[]).length} item(ns) reproduzidos</small></button></div><div class="note">A configuração WireGuard é guardada cifrada pelo Android Keystore no APK. O backup web não exporta a chave privada. Samsung Tizen e LG webOS não expõem às apps comuns uma VPN de sistema equivalente ao Android VpnService.</div></div>`;
 }
 
 function bindCommon(){
@@ -244,19 +321,39 @@ function bindCommon(){
   $('#vpnQuick')?.addEventListener('click',toggleVpn);
   $('#driveQuick')?.addEventListener('click',()=>{state.page='fontes'; save(); layout(); setTimeout(()=>$('#driveSetup')?.click(),60);});
   $('#globalSearchBtn')?.addEventListener('click', globalSearchModal);
-  $('[data-demo-play]')?.addEventListener('click',()=>openPlayer('Conteúdo de demonstração','', 'demo'));
-  $$('[data-stream]').forEach(el=>el.addEventListener('click',()=>{const u=decodeURIComponent(el.dataset.stream||''); if(u) openPlayer(el.querySelector('strong')?.textContent || 'Stream',u,el.dataset.streamType||'');}));
+  $$('[data-home-group]').forEach(el=>el.addEventListener('click',()=>{state.page='tv';state.channelSearch=el.dataset.homeGroup||'';save();layout();}));
+  $$('[data-stream]').forEach(el=>el.addEventListener('click',()=>openStreamElement(el)));
+  $('#homeDriveSetup')?.addEventListener('click',driveModal);
   $('#channelSearch')?.addEventListener('input',debounce(e=>{state.channelSearch=e.target.value; save(); layout();},220));
   $('#clearChannelSearch')?.addEventListener('click',()=>{state.channelSearch='';save();layout();});
   $$('[data-group-filter]').forEach(b=>b.addEventListener('click',()=>{state.channelSearch=b.dataset.groupFilter||'';save();layout();}));
+  $$('[data-fav-url]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();toggleFavoriteItem(b);}));
+  $('#importFootballGuide')?.addEventListener('click',()=>$('#footballFileInput').click());
+  $('#footballExample')?.addEventListener('click',footballExampleModal);
+  $$('[data-broadcaster-url]').forEach(b=>b.addEventListener('click',()=>{const u=b.dataset.broadcasterUrl;if(u) window.open(u,'_blank','noopener,noreferrer');}));
   bindSources();
   bindSettings();
 }
 
+function toggleFavoriteItem(button){
+  const url=decodeURIComponent(button.dataset.favUrl||''); if(!url) return;
+  const i=state.favoriteItems.findIndex(x=>x.url===url);
+  if(i>=0){state.favoriteItems.splice(i,1);toast('Removido dos favoritos.');}
+  else{state.favoriteItems.push({url,name:button.dataset.favName||button.closest('.media-card')?.querySelector('strong')?.textContent||'Favorito',type:button.dataset.favType||'URL',group:button.dataset.favGroup||'',logo:button.dataset.favLogo||''});toast('Adicionado aos favoritos.');}
+  save();layout();
+}
+function footballExampleModal(){
+  const sample={games:[{home:'Equipa A',away:'Equipa B',competition:'Liga',kickoff:new Date(Date.now()+86400000).toISOString(),status:'scheduled',broadcasters:[{country:'Portugal',flag:'🇵🇹',name:'Canal oficial',quality:'HD',url:'https://example.com'}]}]};
+  modal(`<div class="modal-head"><h3>Formato do guia de futebol</h3><button class="icon-btn" data-close>✕</button></div><pre class="codebox">${escapeHtml(JSON.stringify(sample,null,2))}</pre><button class="btn" id="downloadFootballExample">Descarregar exemplo</button>`);
+  $('#downloadFootballExample').addEventListener('click',()=>downloadText('RJPStream_Futebol_Exemplo.json',JSON.stringify(sample,null,2),'application/json'));
+}
+
 function bindSources(){
   $('#importM3U')?.addEventListener('click',()=>$('#m3uFileInput').click());
-  $('#importEpg')?.addEventListener('click',()=>$('#epgFileInput').click());
+  $('#importEpg')?.addEventListener('click',epgModal);
   $('#importBundle')?.addEventListener('click',()=>$('#bundleFileInput').click());
+  $('#addWebProvider')?.addEventListener('click',()=>webProviderModal());
+  $('#addWebProvider2')?.addEventListener('click',()=>webProviderModal());
   $('#addUrl')?.addEventListener('click',()=>urlModal(false));
   $('#addDirect')?.addEventListener('click',()=>urlModal(true));
   $('#driveSetup')?.addEventListener('click', driveModal);
@@ -267,16 +364,22 @@ function bindSources(){
   $$('[data-toggle-source]').forEach(b=>b.addEventListener('click',()=>{const s=state.sources.find(x=>x.id===b.dataset.toggleSource); if(s){s.enabled=s.enabled===false?true:false;save();layout();}}));
   $$('[data-delete-source]').forEach(b=>b.addEventListener('click',()=>confirmDeleteSource(b.dataset.deleteSource)));
   $$('[data-refresh-source]').forEach(b=>b.addEventListener('click',()=>refreshSourceById(b.dataset.refreshSource)));
+  $$('[data-edit-source]').forEach(b=>b.addEventListener('click',()=>editSourceModal(b.dataset.editSource)));
+  $$('[data-open-web-provider]').forEach(b=>b.addEventListener('click',()=>openWebProvider(b.dataset.openWebProvider)));
+  $$('[data-edit-web-provider]').forEach(b=>b.addEventListener('click',()=>webProviderModal(b.dataset.editWebProvider)));
+  $$('[data-delete-web-provider]').forEach(b=>b.addEventListener('click',()=>deleteWebProvider(b.dataset.deleteWebProvider)));
 }
 
 function bindSettings(){
   $('#layoutMode')?.addEventListener('change',e=>{state.layout=e.target.value;save();layout();toast('Preferência de interface guardada.');});
   $('#driveFolder')?.addEventListener('change',e=>{state.drive.folderName=e.target.value.trim()||'RJP Stream';save();});
+  $('#autoRefresh')?.addEventListener('change',e=>{state.autoRefreshMinutes=Math.max(0,+e.target.value||0);save();scheduleAutoRefresh();toast('Atualização automática configurada.');});
   $('#vpnToggle')?.addEventListener('click',toggleVpn);
   $('#vpnScope')?.addEventListener('change',async e=>{state.vpnSplitOnly=e.target.value==='app';save();try{await getVpnPlugin()?.setSplitOnly?.({splitOnly:state.vpnSplitOnly});}catch{}toast('Modo VPN guardado; aplica-se na próxima ligação.');layout();});
   $('#importWG')?.addEventListener('click',()=>$('#wgFileInput').click());
   $('#driveSettingsBtn')?.addEventListener('click',driveModal);
   $('#backupMenu2')?.addEventListener('click',backupModal);
+  $('#clearHistory')?.addEventListener('click',()=>{state.history=[];save();layout();toast('Histórico limpo.');});
 }
 
 $('#m3uFileInput').addEventListener('change', async e=>{
@@ -325,6 +428,12 @@ $('#wgFileInput').addEventListener('change', async e=>{
   }catch(err){ toast(`WireGuard: ${err?.message||err}`); }
 });
 
+$('#footballFileInput').addEventListener('change',async e=>{
+  const f=e.target.files?.[0];if(!f)return;
+  try{const obj=JSON.parse(await f.text());const games=Array.isArray(obj)?obj:obj.games;if(!Array.isArray(games))throw new Error('Falta o array games.');state.footballGames=games.slice(0,500);save();toast(`${state.footballGames.length} jogo(s) importados.`);state.page='futebol';layout();}
+  catch(err){toast(`Guia de futebol inválido: ${err.message}`);}e.target.value='';
+});
+
 function parseM3U(text){
   const lines=text.replace(/^\uFEFF/,'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
   const out=[]; let meta=null;
@@ -370,7 +479,16 @@ function importBundleObject(obj, fileName='RJP Bundle', origin='Local', extra={}
   upsertSource({name:parsed.name,type:'JSON',origin,originType:extra.originType||'local',enabled:true,items:parsed.items,lastSync:new Date().toISOString(),lastStatus:`${parsed.items.length} itens`,...extra});
 }
 
-function applyEpg(text, name='EPG'){
+function epgModal(){
+  modal(`<div class="modal-head"><h3>EPG / XMLTV</h3><button class="icon-btn" data-close>✕</button></div><p class="muted">Importa um ficheiro XMLTV local ou liga um URL remoto para permitir atualização automática.</p><div class="source-actions compact-actions"><button class="source-action" id="epgLocal"><span class="bigicon">📄</span><b>Ficheiro local</b><small>.xml ou .xmltv</small></button><button class="source-action" id="epgRemote"><span class="bigicon">🔗</span><b>URL XMLTV</b><small>https://…/epg.xml</small></button></div><div class="micro">${state.epg?.remoteUrl?`EPG remoto atual: ${escapeHtml(shortOrigin(state.epg.remoteUrl))}`:state.epg?`EPG atual: ${escapeHtml(state.epg.name||'EPG')}`:'Sem EPG configurado'}</div>`);
+  $('#epgLocal').addEventListener('click',()=>{$('#epgFileInput').click();closeModal();});
+  $('#epgRemote').addEventListener('click',()=>{
+    modal(`<div class="modal-head"><h3>EPG por URL</h3><button class="icon-btn" data-close>✕</button></div><div class="field"><label>URL XMLTV</label><input id="epgUrl" value="${escapeHtml(state.epg?.remoteUrl||'')}" placeholder="https://.../epg.xml"></div><button class="btn primary top-gap" id="saveEpgUrl">Guardar e atualizar</button>`);
+    $('#saveEpgUrl').addEventListener('click',async()=>{const url=$('#epgUrl').value.trim();if(!/^https?:\/\//i.test(url))return toast('Introduz uma URL http/https válida.');const b=$('#saveEpgUrl');b.disabled=true;b.textContent='A carregar…';try{const text=await fetchText(url,20000);applyEpg(text,'EPG remoto',url);save();closeModal();layout();}catch(err){b.disabled=false;b.textContent='Guardar e atualizar';toast(`EPG: ${err.message}`);}});
+  });
+}
+
+function applyEpg(text, name='EPG', remoteUrl=''){
   const channels=(text.match(/<channel\b/gi)||[]).length;
   const programmes=(text.match(/<programme\b/gi)||[]).length;
   const nowNext={}, channelMeta={}, byName={};
@@ -396,7 +514,7 @@ function applyEpg(text, name='EPG'){
       else if(start>now && (!rec.next || start<rec.next.start)) rec.next=item;
     });
   } catch(err){ console.warn('EPG',err); }
-  state.epg={name,channels,programmes,nowNext,channelMeta,byName,lastSync:new Date().toISOString()};
+  state.epg={name,channels,programmes,nowNext,channelMeta,byName,remoteUrl,lastSync:new Date().toISOString()};
   toast(`EPG importado: ${channels} canais, ${programmes} programas.`);
 }
 
@@ -446,7 +564,7 @@ function upsertSource(source){
 function randomId(){ return globalThis.crypto?.randomUUID?.() || `rjp-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
 function urlModal(direct){
-  modal(`<div class="modal-head"><h3>${direct?'Adicionar stream':'Adicionar fonte por URL'}</h3><button class="icon-btn" data-close>✕</button></div><div class="form-grid"><div class="field"><label>Nome</label><input id="urlName" placeholder="Ex.: TV Casa"></div><div class="field"><label>Tipo</label><select id="urlType"><option>M3U</option><option>HLS</option><option>DASH</option><option>JSON</option><option>URL</option></select></div></div><div class="field top-gap"><label>URL</label><input id="urlValue" placeholder="https://..."></div><div class="note top-gap">Fontes remotas podem ser bloqueadas por CORS no browser/TV. Em Android podemos depois usar uma camada de rede nativa.</div><button class="btn primary top-gap" id="saveUrl">Guardar e testar</button>`);
+  modal(`<div class="modal-head"><h3>${direct?'Adicionar stream':'Adicionar fonte por URL'}</h3><button class="icon-btn" data-close>✕</button></div><div class="form-grid"><div class="field"><label>Nome</label><input id="urlName" placeholder="Ex.: TV Casa"></div><div class="field"><label>Tipo</label><select id="urlType">${direct?'<option>URL</option><option>HLS</option><option>DASH</option><option>M3U</option><option>JSON</option>':'<option>M3U</option><option>JSON</option><option>HLS</option><option>DASH</option><option>URL</option>'}</select></div></div><div class="field top-gap"><label>URL</label><input id="urlValue" placeholder="https://..."></div><div class="note top-gap">Fontes remotas podem ser bloqueadas por CORS no browser/TV. No APK Android a V1.0 tenta automaticamente a camada HTTP nativa quando necessário.</div><button class="btn primary top-gap" id="saveUrl">Guardar e testar</button>`);
   $('#saveUrl').addEventListener('click',async()=>{
     const name=$('#urlName').value.trim()||'Fonte remota', type=$('#urlType').value, url=$('#urlValue').value.trim();
     if(!/^https?:\/\//i.test(url)) return toast('Introduz uma URL http/https válida.');
@@ -475,12 +593,24 @@ async function buildRemoteSource({name,type,url}){
   return {name,type,origin:url,originType:'remote',remoteUrl:url,enabled:true,items,lastSync:new Date().toISOString(),lastStatus:status};
 }
 
+function getHttpPlugin(){ return globalThis.Capacitor?.Plugins?.RJPHttp || null; }
+async function nativeHttpText(url,{method='GET',body='',headers={}}={}){
+  const plugin=getHttpPlugin(); if(!plugin) throw new Error('HTTP nativo indisponível');
+  const out=await plugin.request({url,method,body,headers});
+  if(!out || out.status<200 || out.status>=300) throw new Error(`HTTP ${out?.status||0}`);
+  return out.body||'';
+}
 async function fetchText(url, timeoutMs=12000, headers={}){
   const c=new AbortController(); const timer=setTimeout(()=>c.abort(),timeoutMs);
   try{
-    const r=await fetch(url,{signal:c.signal,headers,cache:'no-store'});
-    if(!r.ok) throw new Error(`HTTP ${r.status}`);
-    return await r.text();
+    try{
+      const r=await fetch(url,{signal:c.signal,headers,cache:'no-store'});
+      if(!r.ok) throw new Error(`HTTP ${r.status}`);
+      return await r.text();
+    }catch(err){
+      if(getHttpPlugin()) return await nativeHttpText(url,{headers});
+      throw err;
+    }
   } finally { clearTimeout(timer); }
 }
 
@@ -496,16 +626,20 @@ async function refreshSourceById(id){
   layout();
 }
 
-async function refreshAllSources(){
+async function refreshAllSources({silent=false}={}){
   const remote=state.sources.filter(s=>s.remoteUrl && s.originType!=='drive');
-  if(!remote.length && !state.drive.connected) return toast('Não existem fontes remotas para atualizar.');
-  toast('A atualizar fontes…');
+  if(!remote.length && !state.drive.connected && !state.epg?.remoteUrl) return toast('Não existem fontes remotas para atualizar.');
+  if(!silent) toast('A atualizar fontes…');
   for(const s of remote){
     try{ const fresh=await buildRemoteSource({name:s.name,type:s.type,url:s.remoteUrl}); Object.assign(s,{items:fresh.items,lastSync:fresh.lastSync,lastStatus:fresh.lastStatus}); }
     catch(err){ s.lastStatus=`Erro: ${err.message}`; }
   }
   if(state.drive.connected) await driveSync({silent:true});
-  save(); layout(); toast('Atualização concluída.');
+  if(state.epg?.remoteUrl){
+    try{applyEpg(await fetchText(state.epg.remoteUrl,20000),state.epg.name||'EPG remoto',state.epg.remoteUrl);}
+    catch(err){console.warn('EPG remoto',err);}
+  }
+  save(); layout(); if(!silent) toast('Atualização concluída.');
 }
 
 function confirmDeleteSource(id){
@@ -514,8 +648,24 @@ function confirmDeleteSource(id){
   $('#confirmDelete').addEventListener('click',()=>{state.sources=state.sources.filter(x=>x.id!==id);save();closeModal();layout();});
 }
 
+
+function editSourceModal(id){
+  const src=state.sources.find(x=>x.id===id); if(!src) return;
+  const canEditUrl=!!src.remoteUrl;
+  modal(`<div class="modal-head"><h3>Editar fonte</h3><button class="icon-btn" data-close>✕</button></div><div class="form-grid"><div class="field"><label>Nome</label><input id="editSourceName" value="${escapeHtml(src.name||'')}"></div><div class="field"><label>Tipo</label><select id="editSourceType" ${canEditUrl?'':'disabled'}>${['M3U','HLS','DASH','JSON','URL'].map(t=>`<option ${src.type===t?'selected':''}>${t}</option>`).join('')}</select></div></div><div class="field top-gap"><label>URL remota</label><input id="editSourceUrl" value="${escapeHtml(src.remoteUrl||'')}" ${canEditUrl?'':'disabled'}></div><div class="note top-gap">Fontes locais mantêm o conteúdo importado. Fontes remotas podem alterar nome, tipo e URL e serão testadas ao guardar.</div><div class="button-row top-gap"><button class="btn primary" id="saveSourceEdit">Guardar</button><button class="btn" data-close>Cancelar</button></div>`);
+  $('#saveSourceEdit').addEventListener('click',async()=>{
+    const name=$('#editSourceName').value.trim()||src.name||'Fonte';
+    if(!canEditUrl){src.name=name;save();closeModal();layout();toast('Fonte atualizada.');return;}
+    const type=$('#editSourceType').value, url=$('#editSourceUrl').value.trim();
+    if(!/^https?:\/\//i.test(url)) return toast('Introduz uma URL http/https válida.');
+    const btn=$('#saveSourceEdit');btn.disabled=true;btn.textContent='A testar…';
+    try{const fresh=await buildRemoteSource({name,type,url});Object.assign(src,fresh,{id:src.id});save();closeModal();layout();toast('Fonte atualizada.');}
+    catch(err){btn.disabled=false;btn.textContent='Guardar';toast(`Não foi possível validar: ${err.message}`);}
+  });
+}
+
 function backupModal(){
-  modal(`<div class="modal-head"><h3>Backup RJP Stream</h3><button class="icon-btn" data-close>✕</button></div><p class="muted">Exporta fontes, EPG resumido, favoritos e definições. Credenciais temporárias do Google Drive e chaves privadas WireGuard não são exportadas.</p><div class="source-actions compact-actions"><button class="source-action" id="exportBackup"><span class="bigicon">⬇</span><b>Exportar backup</b><small>RJPStream_Backup.json</small></button><button class="source-action" id="importBackup"><span class="bigicon">⬆</span><b>Importar backup</b><small>Restaurar configuração</small></button></div>`);
+  modal(`<div class="modal-head"><h3>Backup RJP Stream</h3><button class="icon-btn" data-close>✕</button></div><p class="muted">Exporta fontes, atalhos Web pessoais, EPG resumido, favoritos e definições. Credenciais temporárias do Google Drive e chaves privadas WireGuard não são exportadas.</p><div class="source-actions compact-actions"><button class="source-action" id="exportBackup"><span class="bigicon">⬇</span><b>Exportar backup</b><small>RJPStream_Backup.json</small></button><button class="source-action" id="importBackup"><span class="bigicon">⬆</span><b>Importar backup</b><small>Restaurar configuração</small></button></div>`);
   $('#exportBackup').addEventListener('click',exportBackup);
   $('#importBackup').addEventListener('click',()=>$('#backupFileInput').click());
 }
@@ -523,6 +673,7 @@ function backupModal(){
 function exportBackup(){
   const copy=structuredCloneSafe(state);
   if(copy.wireguard) copy.wireguard={name:copy.wireguard.name,endpoint:copy.wireguard.endpoint,validated:copy.wireguard.validated};
+  if(copy.drive) copy.drive.bridgeToken='';
   const data={app:'RJP Stream',version:APP_VERSION,createdAt:new Date().toISOString(),state:copy};
   downloadText(`RJPStream_Backup_${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(data,null,2),'application/json');
   toast('Backup exportado.');
@@ -536,19 +687,21 @@ function globalSearchModal(){
     const q=normalizeText(input.value);
     if(!q){ $('#searchResults').innerHTML=`<p class="muted">${items.length} item(ns) disponíveis nas fontes ativas.</p>`; return; }
     const hits=items.filter(x=>normalizeText(`${x.name} ${x.group}`).includes(q)).slice(0,40);
-    $('#searchResults').innerHTML=hits.length?hits.map(x=>`<button class="search-hit" data-hit-url="${encodeURIComponent(x.url||'')}" data-hit-type="${escapeHtml(x.type||detectStreamType(x.url||''))}"><span><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.group||x.type||'')}</small></span><span>▶</span></button>`).join(''):'<p class="muted">Sem resultados.</p>';
-    $$('[data-hit-url]').forEach(b=>b.addEventListener('click',()=>openPlayer(b.querySelector('b')?.textContent||'Stream',decodeURIComponent(b.dataset.hitUrl||''),b.dataset.hitType||'')));
+    $('#searchResults').innerHTML=hits.length?hits.map(x=>`<button class="search-hit" data-hit-url="${encodeURIComponent(x.url||'')}" data-hit-type="${escapeHtml(x.type||detectStreamType(x.url||''))}" data-hit-name="${escapeHtml(x.name||'Stream')}" data-hit-group="${escapeHtml(x.group||'')}" data-hit-logo="${escapeHtml(x.logo||'')}"><span><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.group||x.type||'')}</small></span><span>▶</span></button>`).join(''):'<p class="muted">Sem resultados.</p>';
+    $$('[data-hit-url]').forEach(b=>b.addEventListener('click',()=>openPlayer({name:b.dataset.hitName||b.querySelector('b')?.textContent||'Stream',url:decodeURIComponent(b.dataset.hitUrl||''),type:b.dataset.hitType||'',group:b.dataset.hitGroup||'',logo:b.dataset.hitLogo||''})));
   };
   input.addEventListener('input',debounce(render,120));
   setTimeout(()=>input.focus(),50);
 }
 
 function driveModal(){
-  modal(`<div class="modal-head"><h3>Google Drive</h3><button class="icon-btn" data-close>✕</button></div><p class="muted">A RJP Stream pode ler uma pasta da tua conta Google Drive. Usa uma credencial OAuth 2.0 do tipo Web application.</p><div class="form-grid"><div class="field"><label>Google OAuth Client ID</label><input id="driveClientId" value="${escapeHtml(state.drive.clientId||'')}" placeholder="xxxxxxxx.apps.googleusercontent.com"></div><div class="field"><label>Pasta principal</label><input id="driveFolderName" value="${escapeHtml(state.drive.folderName||'RJP Stream')}"></div></div><div class="note top-gap">Scope usado: <b>drive.readonly</b>. A app só lê ficheiros; não apaga nem altera o teu Drive.</div><div class="button-row top-gap"><button class="btn primary" id="driveConnect">${state.drive.connected?'Sincronizar agora':'Ligar e sincronizar'}</button>${state.drive.connected?'<button class="btn" id="driveDisconnect">Desligar</button>':''}<button class="btn" data-close>Cancelar</button></div><div id="driveStatus" class="muted top-gap">${state.drive.lastError?`Último erro: ${escapeHtml(state.drive.lastError)}`:state.drive.lastSync?`Última sincronização: ${new Date(state.drive.lastSync).toLocaleString('pt-PT')}`:''}</div>`);
+  modal(`<div class="modal-head"><h3>Google Drive</h3><button class="icon-btn" data-close>✕</button></div><p class="muted">A RJP Stream pode ler uma pasta da tua conta Google Drive. Usa uma credencial OAuth 2.0 do tipo Web application.</p><div class="form-grid"><div class="field"><label>Google OAuth Client ID (Web)</label><input id="driveClientId" value="${escapeHtml(state.drive.clientId||'')}" placeholder="xxxxxxxx.apps.googleusercontent.com"></div><div class="field"><label>Pasta principal</label><input id="driveFolderName" value="${escapeHtml(state.drive.folderName||'RJP Stream')}"></div><div class="field"><label>Apps Script Bridge URL (Android/TV opcional)</label><input id="driveBridgeUrl" value="${escapeHtml(state.drive.bridgeUrl||'')}" placeholder="https://script.google.com/macros/s/.../exec"></div><div class="field"><label>Token do Bridge</label><input id="driveBridgeToken" type="password" value="${escapeHtml(state.drive.bridgeToken||'')}" placeholder="Token definido no Apps Script"></div></div><div class="note top-gap">Se definires o Apps Script Bridge, a app usa-o primeiro e funciona também em Android/Android TV/Samsung/LG. Sem Bridge, usa OAuth Web com scope <b>drive.readonly</b>.</div><div class="button-row top-gap"><button class="btn primary" id="driveConnect">${state.drive.connected?'Sincronizar agora':'Ligar e sincronizar'}</button>${state.drive.connected?'<button class="btn" id="driveDisconnect">Desligar</button>':''}<button class="btn" data-close>Cancelar</button></div><div id="driveStatus" class="muted top-gap">${state.drive.lastError?`Último erro: ${escapeHtml(state.drive.lastError)}`:state.drive.lastSync?`Última sincronização: ${new Date(state.drive.lastSync).toLocaleString('pt-PT')}`:''}</div>`);
   $('#driveConnect').addEventListener('click',async()=>{
     state.drive.clientId=$('#driveClientId').value.trim();
-    state.drive.folderName=$('#driveFolderName').value.trim()||'RJP Stream'; save();
-    if(!state.drive.clientId) return toast('Introduz primeiro o OAuth Client ID.');
+    state.drive.folderName=$('#driveFolderName').value.trim()||'RJP Stream';
+    state.drive.bridgeUrl=$('#driveBridgeUrl')?.value.trim()||'';
+    state.drive.bridgeToken=$('#driveBridgeToken')?.value.trim()||''; save();
+    if(!state.drive.bridgeUrl && !state.drive.clientId) return toast('Configura o Apps Script Bridge ou o OAuth Client ID.');
     const status=$('#driveStatus'); status.textContent='A ligar ao Google…';
     try{ await driveAuthorize(); status.textContent='Autorizado. A sincronizar…'; await driveSync({silent:true}); closeModal(); layout(); toast('Google Drive sincronizado.'); }
     catch(err){ state.drive.lastError=err.message; state.drive.connected=false; save(); status.textContent=`Erro: ${err.message}`; }
@@ -599,7 +752,41 @@ async function listDriveFiles(parent){
   return d.files||[];
 }
 
+async function driveSyncBridge({silent=false}={}){
+  const url=state.drive.bridgeUrl?.trim(); if(!url) throw new Error('Bridge URL não configurado.');
+  const body={action:'sync',token:state.drive.bridgeToken||'',folderName:state.drive.folderName||'RJP Stream'};
+  let raw='';
+  try{
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(body),cache:'no-store'});
+    if(!r.ok) throw new Error(`Drive Bridge HTTP ${r.status}`);
+    raw=await r.text();
+  }catch(err){
+    if(getHttpPlugin()) raw=await nativeHttpText(url,{method:'POST',body:JSON.stringify(body),headers:{'Content-Type':'text/plain;charset=utf-8'}});
+    else throw err;
+  }
+  const data=JSON.parse(raw); if(!data?.ok) throw new Error(data?.error||'Drive Bridge devolveu erro.');
+  let imported=0;
+  for(const f of (data.sources||[])){
+    try{
+      const low=String(f.name||'').toLowerCase();
+      if(low.endsWith('.m3u')||low.endsWith('.m3u8')||String(f.type).toUpperCase()==='M3U'){
+        const items=parseM3U(f.content||'');
+        upsertSource({name:String(f.name||'Drive').replace(/\.m3u8?$/i,''),type:'M3U',origin:`Google Drive/${f.name||'fonte'}`,originType:'drive-bridge',driveFileId:f.id||f.name,enabled:true,items,lastSync:new Date().toISOString(),lastStatus:`${items.length} itens`}); imported++;
+      } else if(low.endsWith('.json')||String(f.type).toUpperCase()==='JSON'){
+        const obj=typeof f.content==='string'?JSON.parse(f.content):f.content; const parsed=parseBundle(obj,f.name||'Drive JSON');
+        if(parsed.items.length){upsertSource({name:parsed.name,type:'JSON',origin:`Google Drive/${f.name||'fonte'}`,originType:'drive-bridge',driveFileId:f.id||f.name,enabled:true,items:parsed.items,lastSync:new Date().toISOString(),lastStatus:`${parsed.items.length} itens`});imported++;}
+      }
+    }catch(err){console.warn('Drive Bridge source',f?.name,err);}
+  }
+  if(data.epg?.content) applyEpg(data.epg.content,`Google Drive/${data.epg.name||'EPG'}`);
+  if(data.config) applyRemoteConfig(data.config);
+  state.drive.connected=true;state.drive.lastSync=new Date().toISOString();state.drive.lastError='';save();
+  if(!silent) toast(`Drive Bridge sincronizado: ${imported} fonte(s).`);
+  return imported;
+}
+
 async function driveSync({silent=false}={}){
+  if(state.drive.bridgeUrl) return driveSyncBridge({silent});
   if(!state.drive.clientId) throw new Error('OAuth Client ID não configurado.');
   const root=await findDriveFolder(state.drive.folderName||'RJP Stream');
   if(!root) throw new Error(`Pasta “${state.drive.folderName||'RJP Stream'}” não encontrada no Meu Drive.`);
@@ -642,6 +829,7 @@ function applyRemoteConfig(cfg){
     state.sources.forEach(s=>{if(disabled.has(normalizeText(s.name))) s.enabled=false;});
   }
   if(cfg.layout && ['auto','compact','normal','tv'].includes(cfg.layout)) state.layout=cfg.layout;
+  if(Array.isArray(cfg.footballGames)) state.footballGames=cfg.footballGames.slice(0,500);
 }
 
 function getVpnPlugin(){ return globalThis.Capacitor?.Plugins?.RJPVpn || null; }
@@ -675,28 +863,61 @@ async function toggleVpn(){
   }catch(err){ toast(`VPN: ${err?.message||err}`); await syncNativeVpnStatus({rerender:true}); }
 }
 
-async function openPlayer(title,url,type=''){
+function openStreamElement(el){
+  const u=decodeURIComponent(el.dataset.stream||''); if(!u) return;
+  return openPlayer({name:el.dataset.streamName||el.querySelector('strong')?.textContent||'Stream',url:u,type:el.dataset.streamType||'',group:el.dataset.streamGroup||'',logo:el.dataset.streamLogo||''});
+}
+
+function historyUpsert(meta, patch={}){
+  if(!meta?.url) return null;
+  const list=state.history||(state.history=[]);
+  let rec=list.find(x=>x.url===meta.url);
+  if(!rec){rec={url:meta.url,name:meta.name||'Stream',type:meta.type||detectStreamType(meta.url),group:meta.group||'',logo:meta.logo||'',position:0,duration:0,lastPlayed:new Date().toISOString()};list.unshift(rec);}
+  Object.assign(rec,{name:meta.name||rec.name,type:meta.type||rec.type,group:meta.group??rec.group,logo:meta.logo??rec.logo,...patch,lastPlayed:new Date().toISOString()});
+  state.history=list.sort((a,b)=>new Date(b.lastPlayed||0)-new Date(a.lastPlayed||0)).slice(0,100);
+  return rec;
+}
+
+async function openPlayer(titleOrMeta,url='',type=''){
   cleanupPlayer();
-  modal(`<div class="modal-head"><div><h3>${escapeHtml(title)}</h3><div class="micro" id="playerEngine">A preparar player…</div></div><button class="icon-btn" data-close>✕</button></div><div class="video-wrap"><video id="rjpVideo" controls autoplay playsinline></video><div class="player-overlay" id="playerOverlay">A carregar…</div></div><div class="note" id="playerNote">HLS e DASH são reproduzidos através de motores web quando o dispositivo os suporta. Não existe bypass de DRM.</div>`);
+  const meta=typeof titleOrMeta==='object'&&titleOrMeta?{...titleOrMeta}:{name:titleOrMeta||'Stream',url,type};
+  meta.url=meta.url||url||''; meta.type=meta.type||type||detectStreamType(meta.url);
+  const rec=historyUpsert(meta); save();
+  modal(`<div class="modal-head"><div><h3>${escapeHtml(meta.name||'Stream')}</h3><div class="micro" id="playerEngine">A preparar player…</div></div><button class="icon-btn" data-close>✕</button></div><div class="video-wrap"><video id="rjpVideo" controls autoplay playsinline></video><div class="player-overlay" id="playerOverlay">A carregar…</div></div><div class="note" id="playerNote">HLS e DASH são reproduzidos através de motores web quando o dispositivo os suporta. Não existe bypass de DRM.</div>`);
   const video=$('#rjpVideo'), overlay=$('#playerOverlay'), engine=$('#playerEngine');
-  if(!url){overlay.textContent='Player de demonstração';engine.textContent='Demonstração';return;}
-  const detected=(type||detectStreamType(url)).toUpperCase();
-  playerCleanup=()=>{try{activeHls?.destroy?.();}catch{} try{activeDash?.reset?.();}catch{} activeHls=null;activeDash=null;};
+  if(!meta.url){overlay.textContent='Sem URL de reprodução.';engine.textContent='Sem fonte';return;}
+  const detected=(meta.type||detectStreamType(meta.url)).toUpperCase();
+  let lastPersist=0;
+  const persistPosition=()=>{
+    if(!video || !meta.url) return;
+    const duration=Number.isFinite(video.duration)&&video.duration>0?video.duration:0;
+    const position=Number.isFinite(video.currentTime)&&video.currentTime>0?video.currentTime:0;
+    historyUpsert(meta,{position,duration}); save(); lastPersist=Date.now();
+  };
+  playerCleanup=()=>{persistPosition();try{activeHls?.destroy?.();}catch{} try{activeDash?.reset?.();}catch{} activeHls=null;activeDash=null;};
   try{
-    if(detected==='HLS' || url.toLowerCase().includes('.m3u8')){
+    if(detected==='HLS' || meta.url.toLowerCase().includes('.m3u8')){
       const nativeHls = !!video.canPlayType('application/vnd.apple.mpegurl');
       const tvNativePreferred = /webos|web0s|tizen|smart-tv|smarttv|hbbtv/i.test(navigator.userAgent);
-      if(nativeHls && (tvNativePreferred || 'ManagedMediaSource' in window)){ video.src=url; engine.textContent='HLS nativo'; }
+      if(nativeHls && (tvNativePreferred || 'ManagedMediaSource' in window)){ video.src=meta.url; engine.textContent='HLS nativo'; }
       else {
         await loadScriptOnce(HLS_JS_URL,()=>globalThis.Hls);
         if(!Hls.isSupported()) throw new Error('HLS.js não é suportado neste dispositivo.');
-        activeHls=new Hls({enableWorker:true,lowLatencyMode:true}); activeHls.loadSource(url); activeHls.attachMedia(video); engine.textContent='HLS.js 1.7.2';
+        activeHls=new Hls({enableWorker:true,lowLatencyMode:true}); activeHls.loadSource(meta.url); activeHls.attachMedia(video); engine.textContent='HLS.js 1.7.2';
         activeHls.on(Hls.Events.ERROR,(_,data)=>{if(data?.fatal) overlay.textContent=`Erro HLS: ${data.type||''} ${data.details||''}`;});
       }
-    } else if(detected==='DASH' || url.toLowerCase().includes('.mpd')){
+    } else if(detected==='DASH' || meta.url.toLowerCase().includes('.mpd')){
       await loadScriptOnce(DASH_JS_URL,()=>globalThis.dashjs);
-      activeDash=dashjs.MediaPlayer().create(); activeDash.initialize(video,url,true); engine.textContent='dash.js 5.2.1';
-    } else { video.src=url; engine.textContent='HTML5 Video'; }
+      activeDash=dashjs.MediaPlayer().create(); activeDash.initialize(video,meta.url,true); engine.textContent='dash.js 5.2.1';
+    } else { video.src=meta.url; engine.textContent='HTML5 Video'; }
+    video.addEventListener('loadedmetadata',()=>{
+      if(rec?.position>10 && Number.isFinite(video.duration) && video.duration>0 && rec.position<video.duration-20){
+        try{video.currentTime=rec.position;$('#playerNote').textContent=`Retomado em ${formatTime(rec.position)}. `+$('#playerNote').textContent;}catch{}
+      }
+    },{once:true});
+    video.addEventListener('timeupdate',()=>{if(Date.now()-lastPersist>5000)persistPosition();});
+    video.addEventListener('pause',persistPosition);
+    video.addEventListener('ended',()=>{historyUpsert(meta,{position:0,duration:Number.isFinite(video.duration)?video.duration:0});save();});
     video.addEventListener('canplay',()=>overlay.classList.add('hidden'),{once:true});
     video.addEventListener('playing',()=>overlay.classList.add('hidden'),{once:true});
     video.addEventListener('error',()=>{overlay.textContent='O stream não pôde ser reproduzido neste dispositivo.';});
@@ -704,6 +925,7 @@ async function openPlayer(title,url,type=''){
 }
 
 function cleanupPlayer(){ if(playerCleanup){try{playerCleanup();}catch{} playerCleanup=null;} }
+function formatTime(seconds=0){const s=Math.max(0,Math.floor(seconds));const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;return h?`${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`:`${m}:${String(sec).padStart(2,'0')}`;}
 
 function modal(html){
   closeModal();
@@ -718,9 +940,27 @@ function redactEndpoint(s=''){return s?String(s).replace(/(^.{3}).*(:\d+)?$/,'$1
 function debounce(fn,ms){let t;return (...args)=>{clearTimeout(t);t=setTimeout(()=>fn(...args),ms);};}
 function downloadText(name,text,type='text/plain'){const blob=new Blob([text],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);}
 
+let autoRefreshTimer=null;
+function scheduleAutoRefresh(){
+  clearInterval(autoRefreshTimer); autoRefreshTimer=null;
+  const minutes=Math.max(0,+state.autoRefreshMinutes||0);
+  if(!minutes) return;
+  autoRefreshTimer=setInterval(()=>autoRefreshTick(),minutes*60*1000);
+}
+async function autoRefreshTick(){
+  if(document.hidden || !navigator.onLine) return;
+  const minutes=Math.max(0,+state.autoRefreshMinutes||0); if(!minutes) return;
+  const last=state.lastAutoRefresh?new Date(state.lastAutoRefresh).getTime():0;
+  if(last && Date.now()-last < minutes*60*1000*0.9) return;
+  const hasRemote=state.sources.some(s=>s.remoteUrl)||state.drive.connected||!!state.epg?.remoteUrl; if(!hasRemote) return;
+  try{await refreshAllSources({silent:true});state.lastAutoRefresh=new Date().toISOString();save();}
+  catch(err){console.warn('Auto refresh',err);}
+}
+
 window.addEventListener('resize',()=>{clearTimeout(window.__rjpResize);window.__rjpResize=setTimeout(layout,160);});
 window.addEventListener('keydown',e=>{
-  if(e.key==='Escape'){closeModal();return;}
+  if(e.key==='Escape' || e.key==='BrowserBack'){closeModal();return;}
+  if((e.key==='Enter' || e.key===' ') && document.activeElement?.matches?.('[tabindex="0"]')){document.activeElement.click();e.preventDefault();return;}
   if(!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) return;
   const f=document.activeElement; if(f && ['INPUT','SELECT','TEXTAREA','VIDEO'].includes(f.tagName)) return;
   const candidates=$$('button,[tabindex="0"]:not([disabled])').filter(x=>x.offsetParent!==null);
@@ -741,4 +981,6 @@ if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.s
 save();
 layout();
 setTimeout(()=>syncNativeVpnStatus({rerender:true}),120);
+scheduleAutoRefresh();
+setTimeout(()=>autoRefreshTick(),1800);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden) syncNativeVpnStatus({rerender:true});});
