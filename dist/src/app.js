@@ -1,9 +1,9 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-const APP_VERSION = '1.2.1';
-const STORAGE_KEY = 'rjpStreamStateV12';
-const LEGACY_KEYS = ['rjpStreamStateV11','rjpStreamStateV10','rjpStreamStateV3','rjpStreamStateV2','rjpStreamState'];
+const APP_VERSION = '1.3.0';
+const STORAGE_KEY = 'rjpStreamStateV13';
+const LEGACY_KEYS = ['rjpStreamStateV12','rjpStreamStateV11','rjpStreamStateV10','rjpStreamStateV3','rjpStreamStateV2','rjpStreamState'];
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const GIS_URL = 'https://accounts.google.com/gsi/client';
 const HLS_JS_URL = 'https://cdn.jsdelivr.net/npm/hls.js@1.7.2/dist/hls.min.js';
@@ -239,7 +239,7 @@ function sourcesPage(){
   const visibleSources = q ? state.sources.filter(s=>normalizeText(`${s.name} ${s.type} ${s.origin}`).includes(q)) : state.sources;
   return `
   <div class="panel">
-    <div class="section-head"><div><h2>Minhas Fontes</h2><div class="sub">M3U/M3U8, HLS, DASH, JSON/RJP Bundle, EPG, Google Drive e atalhos Web personalizados.</div></div><div class="button-row"><button class="btn" id="refreshAll">↻ Atualizar</button><button class="btn primary" id="addUrl">＋ Adicionar URL</button></div></div>
+    <div class="section-head"><div><h2>Minhas Fontes</h2><div class="sub">M3U/M3U8, HLS, DASH, JSON/RJP Bundle, EPG, Google Drive e atalhos Web personalizados.</div></div><div class="button-row"><button class="btn" id="refreshAll">↻ Atualizar</button><button class="btn primary" id="addUrl">＋ Analisar URL</button></div></div>
     <div class="source-actions">
       <button class="source-action" id="importM3U"><span class="bigicon">📄</span><b>Importar M3U</b><small>Ficheiro .m3u ou .m3u8</small></button>
       <button class="source-action" id="addDirect"><span class="bigicon">🔗</span><b>URL / HLS / DASH</b><small>Stream ou playlist remota</small></button>
@@ -260,7 +260,11 @@ function sourcesPage(){
 
 function sourceRow(s){
   const last = s.lastSync ? new Date(s.lastSync).toLocaleString('pt-PT') : 'Nunca';
-  return `<div class="list-row source-row"><div class="source-symbol">${s.type==='M3U'?'📺':s.type==='JSON'?'🧩':s.originType==='drive'?'☁':'🔗'}</div><div><b>${escapeHtml(s.name)}</b><div class="meta">${escapeHtml(s.type)} · ${s.items?.length||1} item(ns) · ${escapeHtml(shortOrigin(s.origin||'Local'))}</div><div class="micro">Última atualização: ${escapeHtml(last)} ${s.lastStatus?`· ${escapeHtml(s.lastStatus)}`:''}</div></div><div class="row-actions"><button class="icon-btn" data-edit-source="${s.id}" title="Editar">✎</button><button class="icon-btn" data-refresh-source="${s.id}" title="Atualizar">↻</button><button class="toggle ${s.enabled!==false?'on':''}" data-toggle-source="${s.id}" aria-label="Ativar/desativar"><i></i></button><button class="icon-btn" data-delete-source="${s.id}" title="Remover">✕</button></div></div>`;
+  const loaded=s.items?.length||0;
+  const total=Math.max(loaded,+s.totalAvailable||0);
+  const countText=total>loaded?`${loaded} de ${total} item(ns)`:`${loaded||1} item(ns)`;
+  const canManage=!!s.remoteUrl && ['M3U','JSON'].includes(String(s.type||'').toUpperCase());
+  return `<div class="list-row source-row"><div class="source-symbol">${s.type==='M3U'?'📺':s.type==='JSON'?'🧩':s.originType==='drive'?'☁':'🔗'}</div><div><b>${escapeHtml(s.name)}</b><div class="meta">${escapeHtml(s.type)} · ${countText} · ${escapeHtml(shortOrigin(s.origin||'Local'))}</div><div class="micro">Última atualização: ${escapeHtml(last)} ${s.lastStatus?`· ${escapeHtml(s.lastStatus)}`:''}</div></div><div class="row-actions">${canManage?`<button class="icon-btn" data-manage-source="${s.id}" title="Gerir canais">☷</button>`:''}<button class="icon-btn" data-edit-source="${s.id}" title="Editar">✎</button><button class="icon-btn" data-refresh-source="${s.id}" title="Atualizar">↻</button><button class="toggle ${s.enabled!==false?'on':''}" data-toggle-source="${s.id}" aria-label="Ativar/desativar"><i></i></button><button class="icon-btn" data-delete-source="${s.id}" title="Remover">✕</button></div></div>`;
 }
 
 function webProviderRow(p){
@@ -313,7 +317,7 @@ function settingsPage(){
   return `<div class="kpi-grid"><div class="kpi"><b>${p.label}</b><small>Layout detetado</small></div><div class="kpi"><b>${window.innerWidth}×${window.innerHeight}</b><small>Área útil CSS</small></div><div class="kpi"><b>${window.devicePixelRatio || 1}×</b><small>Densidade de píxeis</small></div><div class="kpi"><b>${APP_VERSION}</b><small>Versão</small></div></div>
   <div class="section panel"><h2 class="panel-title">Interface e atualização</h2><div class="form-grid"><div class="field"><label>Modo</label><select id="layoutMode"><option value="auto" ${state.layout==='auto'?'selected':''}>Automático</option><option value="compact" ${state.layout==='compact'?'selected':''}>Compacto</option><option value="normal" ${state.layout==='normal'?'selected':''}>Normal</option><option value="tv" ${state.layout==='tv'?'selected':''}>TV à distância</option></select></div><div class="field"><label>Pasta Google Drive</label><input id="driveFolder" value="${escapeHtml(state.drive.folderName||'RJP Stream')}" /></div><div class="field"><label>Atualização automática de fontes</label><select id="autoRefresh"><option value="0" ${+state.autoRefreshMinutes===0?'selected':''}>Desativada</option><option value="15" ${+state.autoRefreshMinutes===15?'selected':''}>15 minutos</option><option value="30" ${+state.autoRefreshMinutes===30?'selected':''}>30 minutos</option><option value="60" ${+state.autoRefreshMinutes===60?'selected':''}>1 hora</option><option value="180" ${+state.autoRefreshMinutes===180?'selected':''}>3 horas</option><option value="360" ${+state.autoRefreshMinutes===360?'selected':''}>6 horas</option></select></div><div class="field"><label>Última atualização automática</label><input value="${state.lastAutoRefresh?new Date(state.lastAutoRefresh).toLocaleString('pt-PT'):'—'}" disabled></div></div></div>
   <div class="section panel"><div class="section-head"><div><h2>Google Drive</h2><div class="sub">Liga a tua própria credencial OAuth e sincroniza M3U/JSON/EPG a partir da pasta escolhida.</div></div><button class="btn ${state.drive.connected?'primary':''}" id="driveSettingsBtn">${state.drive.connected?'Sincronizar':'Configurar Drive'}</button></div><div class="status-grid"><div><span>Estado</span><b>${state.drive.connected?'Ligado':'Desligado'}</b></div><div><span>Última sync</span><b>${state.drive.lastSync?new Date(state.drive.lastSync).toLocaleString('pt-PT'):'—'}</b></div></div></div>
-  <div class="section panel"><div class="section-head"><div><h2>VPN WireGuard</h2><div class="sub">No APK Android/Android TV a V1.2.1 usa o túnel WireGuard nativo. No browser, Samsung e LG esta opção fica apenas informativa.</div></div><button class="btn ${state.vpn?'primary':''}" id="vpnToggle">${state.vpn?'Desligar':'Ligar'} VPN</button></div><div class="form-grid"><div class="field"><label>Encaminhamento</label><select id="vpnScope"><option value="app" ${state.vpnSplitOnly?'selected':''}>Só RJP Stream</option><option value="device" ${!state.vpnSplitOnly?'selected':''}>Todo o dispositivo</option></select></div><div class="field"><label>Motor</label><input value="${nativeVpnAvailable()?'WireGuard Android nativo':'Indisponível nesta plataforma'}" disabled></div></div><div class="source-actions compact-actions"><button class="source-action" id="importWG"><span class="bigicon">🛡</span><b>Importar WireGuard</b><small>${state.wireguard?escapeHtml(state.wireguard.name):'Ficheiro .conf'}</small></button><button class="source-action" id="backupMenu2"><span class="bigicon">💾</span><b>Backup</b><small>Guardar fontes e definições</small></button><button class="source-action" id="clearHistory"><span class="bigicon">🕘</span><b>Limpar histórico</b><small>${(state.history||[]).length} item(ns) reproduzidos</small></button></div><div class="note">A configuração WireGuard é guardada cifrada pelo Android Keystore no APK. O backup web não exporta a chave privada. Samsung Tizen e LG webOS não expõem às apps comuns uma VPN de sistema equivalente ao Android VpnService.</div></div>`;
+  <div class="section panel"><div class="section-head"><div><h2>VPN WireGuard</h2><div class="sub">No APK Android/Android TV a V1.3 usa o túnel WireGuard nativo. No browser, Samsung e LG esta opção fica apenas informativa.</div></div><button class="btn ${state.vpn?'primary':''}" id="vpnToggle">${state.vpn?'Desligar':'Ligar'} VPN</button></div><div class="form-grid"><div class="field"><label>Encaminhamento</label><select id="vpnScope"><option value="app" ${state.vpnSplitOnly?'selected':''}>Só RJP Stream</option><option value="device" ${!state.vpnSplitOnly?'selected':''}>Todo o dispositivo</option></select></div><div class="field"><label>Motor</label><input value="${nativeVpnAvailable()?'WireGuard Android nativo':'Indisponível nesta plataforma'}" disabled></div></div><div class="source-actions compact-actions"><button class="source-action" id="importWG"><span class="bigicon">🛡</span><b>Importar WireGuard</b><small>${state.wireguard?escapeHtml(state.wireguard.name):'Ficheiro .conf'}</small></button><button class="source-action" id="backupMenu2"><span class="bigicon">💾</span><b>Backup</b><small>Guardar fontes e definições</small></button><button class="source-action" id="clearHistory"><span class="bigicon">🕘</span><b>Limpar histórico</b><small>${(state.history||[]).length} item(ns) reproduzidos</small></button></div><div class="note">A configuração WireGuard é guardada cifrada pelo Android Keystore no APK. O backup web não exporta a chave privada. Samsung Tizen e LG webOS não expõem às apps comuns uma VPN de sistema equivalente ao Android VpnService.</div></div>`;
 }
 
 function bindCommon(){
@@ -365,6 +369,7 @@ function bindSources(){
   $$('[data-delete-source]').forEach(b=>b.addEventListener('click',()=>confirmDeleteSource(b.dataset.deleteSource)));
   $$('[data-refresh-source]').forEach(b=>b.addEventListener('click',()=>refreshSourceById(b.dataset.refreshSource)));
   $$('[data-edit-source]').forEach(b=>b.addEventListener('click',()=>editSourceModal(b.dataset.editSource)));
+  $$('[data-manage-source]').forEach(b=>b.addEventListener('click',()=>manageRemoteSource(b.dataset.manageSource)));
   $$('[data-open-web-provider]').forEach(b=>b.addEventListener('click',()=>openWebProvider(b.dataset.openWebProvider)));
   $$('[data-edit-web-provider]').forEach(b=>b.addEventListener('click',()=>webProviderModal(b.dataset.editWebProvider)));
   $$('[data-delete-web-provider]').forEach(b=>b.addEventListener('click',()=>deleteWebProvider(b.dataset.deleteWebProvider)));
@@ -385,8 +390,9 @@ function bindSettings(){
 $('#m3uFileInput').addEventListener('change', async e=>{
   const f=e.target.files?.[0]; if(!f) return;
   const text=await f.text(); const items=parseM3U(text);
-  upsertSource({name:f.name.replace(/\.m3u8?$/i,''),type:'M3U',origin:'Ficheiro local',originType:'local',enabled:true,items,lastSync:new Date().toISOString(),lastStatus:`${items.length} itens`});
-  save(); e.target.value=''; toast(`${items.length} item(ns) importados.`); layout();
+  e.target.value='';
+  if(!items.length) return toast('Não foram encontrados canais/streams reconhecíveis neste ficheiro.');
+  playlistPreviewModal({name:f.name.replace(/\.m3u8?$/i,''),type:'M3U',origin:'Ficheiro local',originType:'local',items});
 });
 
 $('#epgFileInput').addEventListener('change', async e=>{
@@ -452,6 +458,113 @@ function parseM3U(text){
     }
   }
   return dedupeItems(out);
+}
+
+function playlistItemKey(item){
+  const id=normalizeText(item?.tvgId||'').trim();
+  if(id) return `id:${id}`;
+  const name=normalizeText(item?.name||'').trim(), group=normalizeText(item?.group||'').trim();
+  if(name) return `name:${name}|group:${group}`;
+  return `url:${String(item?.url||'').trim()}`;
+}
+
+function applySourceSelection(items, selectionMode='all', selectedKeys=[]){
+  if(selectionMode!=='subset' || !Array.isArray(selectedKeys) || !selectedKeys.length) return items;
+  const allowed=new Set(selectedKeys);
+  return items.filter(x=>allowed.has(playlistItemKey(x)));
+}
+
+function playlistPreviewModal({name='Fonte',type='M3U',origin='Local',originType='local',remoteUrl='',items=[],sourceId='',selectedKeys=null}){
+  const catalog=dedupeItems(items);
+  if(!catalog.length) return toast('A fonte não contém canais/streams reconhecíveis.');
+  const byKey=new Map(catalog.map(x=>[playlistItemKey(x),x]));
+  const selected=new Set(Array.isArray(selectedKeys) ? selectedKeys.filter(k=>byKey.has(k)) : catalog.map(playlistItemKey));
+  const groups=[...new Set(catalog.map(x=>x.group||'Sem categoria'))].sort((a,b)=>a.localeCompare(b,'pt'));
+  let query='';
+
+  modal(`<div class="modal-head"><div><h3>Análise da fonte</h3><div class="micro">${escapeHtml(name)} · ${escapeHtml(type)}</div></div><button class="icon-btn" data-close>✕</button></div>
+    <div class="preview-summary">
+      <div><b>${catalog.length}</b><small>Encontrados</small></div>
+      <div><b>${groups.length}</b><small>Categorias</small></div>
+      <div><b id="previewSelected">${selected.size}</b><small>Selecionados</small></div>
+    </div>
+    <div class="preview-toolbar">
+      <div class="searchbar preview-search"><input id="previewSearch" placeholder="Pesquisar canal ou categoria…"><button class="btn" id="previewClear">Limpar</button></div>
+      <div class="button-row"><button class="btn" id="previewAll">Selecionar tudo</button><button class="btn" id="previewNone">Limpar seleção</button></div>
+    </div>
+    <div class="preview-layout"><div><h4>Categorias</h4><div id="previewGroups" class="preview-groups"></div></div><div><h4>Canais / streams</h4><div id="previewRows" class="preview-list"></div><div id="previewLimit" class="micro"></div></div></div>
+    <div class="preview-footer"><div class="muted">Escolhe apenas os itens que queres guardar nesta fonte.</div><div class="button-row"><button class="btn" data-close>Cancelar</button><button class="btn primary" id="previewImport">Importar selecionados</button></div></div>`);
+
+  const updateSelectedCount=()=>{$('#previewSelected').textContent=String(selected.size);};
+  const filtered=()=>{const q=normalizeText(query);return q?catalog.filter(x=>normalizeText(`${x.name||''} ${x.group||''} ${x.tvgId||''}`).includes(q)):catalog;};
+  const renderGroups=()=>{
+    $('#previewGroups').innerHTML=groups.map(group=>{
+      const members=catalog.filter(x=>(x.group||'Sem categoria')===group);
+      const checked=members.length && members.every(x=>selected.has(playlistItemKey(x)));
+      const partial=!checked && members.some(x=>selected.has(playlistItemKey(x)));
+      return `<label class="preview-group ${checked?'on':''}"><input type="checkbox" data-preview-group="${escapeHtml(group)}" ${checked?'checked':''}><span><b>${escapeHtml(group)}</b><small>${members.length} item(ns)${partial?' · parcial':''}</small></span></label>`;
+    }).join('');
+    $$('[data-preview-group]').forEach(cb=>cb.addEventListener('change',()=>{
+      const group=cb.dataset.previewGroup;
+      const members=catalog.filter(x=>(x.group||'Sem categoria')===group);
+      members.forEach(x=>{const k=playlistItemKey(x);cb.checked?selected.add(k):selected.delete(k);});
+      updateSelectedCount();renderGroups();renderRows();
+    }));
+  };
+  const renderRows=()=>{
+    const hits=filtered(), visible=hits.slice(0,300);
+    $('#previewRows').innerHTML=visible.map(x=>{
+      const k=playlistItemKey(x), checked=selected.has(k);
+      return `<label class="preview-row"><input type="checkbox" data-preview-item="${escapeHtml(k)}" ${checked?'checked':''}><span><b>${escapeHtml(x.name||'Stream')}</b><small>${escapeHtml(x.group||'Sem categoria')}${x.tvgId?` · ${escapeHtml(x.tvgId)}`:''}</small></span><em>${escapeHtml(x.type||detectStreamType(x.url||''))}</em></label>`;
+    }).join('') || '<div class="panel empty"><p>Sem resultados.</p></div>';
+    $('#previewLimit').textContent=hits.length>300?`A mostrar 300 de ${hits.length}. Usa a pesquisa para localizar os restantes.`:`${hits.length} resultado(s).`;
+    $$('[data-preview-item]').forEach(cb=>cb.addEventListener('change',()=>{cb.checked?selected.add(cb.dataset.previewItem):selected.delete(cb.dataset.previewItem);updateSelectedCount();renderGroups();}));
+  };
+  renderGroups();renderRows();updateSelectedCount();
+
+  $('#previewSearch').addEventListener('input',debounce(e=>{query=e.target.value;renderRows();},120));
+  $('#previewClear').addEventListener('click',()=>{$('#previewSearch').value='';query='';renderRows();});
+  $('#previewAll').addEventListener('click',()=>{catalog.forEach(x=>selected.add(playlistItemKey(x)));updateSelectedCount();renderGroups();renderRows();});
+  $('#previewNone').addEventListener('click',()=>{selected.clear();updateSelectedCount();renderGroups();renderRows();});
+  $('#previewImport').addEventListener('click',()=>{
+    if(!selected.size) return toast('Seleciona pelo menos um canal/stream.');
+    const chosen=catalog.filter(x=>selected.has(playlistItemKey(x)));
+    const mode=chosen.length===catalog.length?'all':'subset';
+    const keys=mode==='subset'?chosen.map(playlistItemKey):[];
+    const source={name,type,origin,originType,remoteUrl:remoteUrl||undefined,enabled:true,items:chosen,totalAvailable:catalog.length,categoryCount:groups.length,selectionMode:mode,selectedKeys:keys,lastSync:new Date().toISOString(),lastStatus:`${chosen.length} de ${catalog.length} itens importados`};
+    if(sourceId){
+      const existing=state.sources.find(x=>x.id===sourceId);
+      if(existing) Object.assign(existing,source,{id:existing.id}); else upsertSource(source);
+    } else upsertSource(source);
+    save();closeModal();layout();toast(`${chosen.length} item(ns) importados de ${catalog.length}.`);
+  });
+}
+
+async function loadRemoteCatalog({name,type,url}){
+  const normalized=String(type||'M3U').toUpperCase();
+  if(normalized==='M3U'){
+    const text=await fetchText(url,20000);
+    const items=parseM3U(text);
+    if(!items.length) throw new Error('A lista M3U não contém canais/streams reconhecíveis.');
+    return {name,type:'M3U',items};
+  }
+  if(normalized==='JSON'){
+    const text=await fetchText(url,20000);
+    const parsed=parseBundle(JSON.parse(text),name);
+    if(!parsed.items.length) throw new Error('O JSON não contém itens reconhecíveis.');
+    return {name:parsed.name||name,type:'JSON',items:parsed.items};
+  }
+  throw new Error('A pré-visualização está disponível para M3U/M3U8 e JSON/RJP Bundle.');
+}
+
+async function manageRemoteSource(id){
+  const src=state.sources.find(x=>x.id===id); if(!src?.remoteUrl) return;
+  modal(`<div class="modal-head"><h3>A analisar fonte…</h3><button class="icon-btn" data-close>✕</button></div><p class="muted">${escapeHtml(src.name||'Fonte')}</p><div class="preview-loading">A descarregar e a identificar canais/categorias.</div>`);
+  try{
+    const catalog=await loadRemoteCatalog({name:src.name,type:src.type,url:src.remoteUrl});
+    const selectedKeys=src.selectionMode==='subset'?(src.selectedKeys||[]):catalog.items.map(playlistItemKey);
+    playlistPreviewModal({name:src.name,type:catalog.type,origin:src.origin||src.remoteUrl,originType:src.originType||'remote',remoteUrl:src.remoteUrl,items:catalog.items,sourceId:src.id,selectedKeys});
+  }catch(err){closeModal();toast(`Não foi possível analisar: ${err.message}`);}
 }
 
 function parseBundle(obj, fallbackName='RJP Bundle'){
@@ -564,33 +677,39 @@ function upsertSource(source){
 function randomId(){ return globalThis.crypto?.randomUUID?.() || `rjp-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
 function urlModal(direct){
-  modal(`<div class="modal-head"><h3>${direct?'Adicionar stream':'Adicionar fonte por URL'}</h3><button class="icon-btn" data-close>✕</button></div><div class="form-grid"><div class="field"><label>Nome</label><input id="urlName" placeholder="Ex.: TV Casa"></div><div class="field"><label>Tipo</label><select id="urlType">${direct?'<option>URL</option><option>HLS</option><option>DASH</option><option>M3U</option><option>JSON</option>':'<option>M3U</option><option>JSON</option><option>HLS</option><option>DASH</option><option>URL</option>'}</select></div></div><div class="field top-gap"><label>URL</label><input id="urlValue" placeholder="https://..."></div><div class="note top-gap">Fontes remotas podem ser bloqueadas por CORS no browser/TV. No APK Android a V1.0 tenta automaticamente a camada HTTP nativa quando necessário.</div><button class="btn primary top-gap" id="saveUrl">Guardar e testar</button>`);
+  modal(`<div class="modal-head"><h3>${direct?'Adicionar stream':'Analisar fonte por URL'}</h3><button class="icon-btn" data-close>✕</button></div><div class="form-grid"><div class="field"><label>Nome</label><input id="urlName" placeholder="Ex.: TV Casa"></div><div class="field"><label>Tipo</label><select id="urlType">${direct?'<option>URL</option><option>HLS</option><option>DASH</option><option>M3U</option><option>JSON</option>':'<option>M3U</option><option>JSON</option><option>HLS</option><option>DASH</option><option>URL</option>'}</select></div></div><div class="field top-gap"><label>URL</label><input id="urlValue" placeholder="https://..."></div><div class="note top-gap">Na V1.3, listas M3U/M3U8 e JSON são analisadas primeiro: a app mostra quantos itens e categorias encontrou e deixa escolher o que importar. Fontes remotas podem ser bloqueadas por CORS no browser/TV; no APK Android é usada a camada HTTP nativa quando necessário.</div><button class="btn primary top-gap" id="saveUrl">${direct?'Guardar e testar':'Analisar fonte'}</button>`);
   $('#saveUrl').addEventListener('click',async()=>{
     const name=$('#urlName').value.trim()||'Fonte remota', type=$('#urlType').value, url=$('#urlValue').value.trim();
     if(!/^https?:\/\//i.test(url)) return toast('Introduz uma URL http/https válida.');
-    const btn=$('#saveUrl'); btn.disabled=true; btn.textContent='A testar…';
+    const btn=$('#saveUrl'); btn.disabled=true; btn.textContent=['M3U','JSON'].includes(type)?'A analisar…':'A testar…';
     try{
+      if(['M3U','JSON'].includes(type)){
+        const catalog=await loadRemoteCatalog({name,type,url});
+        return playlistPreviewModal({name:catalog.name||name,type:catalog.type,origin:url,originType:'remote',remoteUrl:url,items:catalog.items});
+      }
       const source=await buildRemoteSource({name,type,url});
       upsertSource(source); save(); closeModal(); toast(`${source.items.length} item(ns) preparados.`); layout();
     } catch(err){
-      const items = ['M3U','JSON'].includes(type) ? [] : [{name,group:type,url,type:type==='URL'?detectStreamType(url):type}];
-      upsertSource({name,type,origin:url,originType:'remote',remoteUrl:url,enabled:true,items,lastSync:new Date().toISOString(),lastStatus:`Guardada sem teste: ${err.message}`});
-      save(); closeModal(); toast('Fonte guardada, mas não foi possível testá-la agora.'); layout();
+      btn.disabled=false;btn.textContent=direct?'Guardar e testar':'Analisar fonte';
+      toast(`Não foi possível validar: ${err.message}`);
     }
   });
 }
 
-async function buildRemoteSource({name,type,url}){
+async function buildRemoteSource({name,type,url,selectionMode='all',selectedKeys=[]}){
   let items=[];
+  let totalAvailable=0;
   let status='Ligação verificada';
-  if(type==='M3U'){
-    const text=await fetchText(url,12000); items=parseM3U(text); status=`${items.length} itens`;
-  } else if(type==='JSON'){
-    const text=await fetchText(url,12000); const parsed=parseBundle(JSON.parse(text),name); items=parsed.items; status=`${items.length} itens`;
+  if(type==='M3U' || type==='JSON'){
+    const catalog=await loadRemoteCatalog({name,type,url});
+    totalAvailable=catalog.items.length;
+    items=applySourceSelection(catalog.items,selectionMode,selectedKeys);
+    status=selectionMode==='subset'?`${items.length} de ${totalAvailable} itens`:`${items.length} itens`;
   } else {
     items=[{name,group:type,url,type:type==='URL'?detectStreamType(url):type}];
+    totalAvailable=items.length;
   }
-  return {name,type,origin:url,originType:'remote',remoteUrl:url,enabled:true,items,lastSync:new Date().toISOString(),lastStatus:status};
+  return {name,type,origin:url,originType:'remote',remoteUrl:url,enabled:true,items,totalAvailable,selectionMode,selectedKeys:selectionMode==='subset'?selectedKeys:[],lastSync:new Date().toISOString(),lastStatus:status};
 }
 
 function getHttpPlugin(){ return globalThis.Capacitor?.Plugins?.RJPHttp || null; }
@@ -620,8 +739,8 @@ async function refreshSourceById(id){
   if(!s.remoteUrl){ toast('Esta fonte é local e não tem URL de atualização.'); return; }
   s.lastStatus='A atualizar…'; save(); layout();
   try{
-    const fresh=await buildRemoteSource({name:s.name,type:s.type,url:s.remoteUrl});
-    Object.assign(s,{items:fresh.items,lastSync:fresh.lastSync,lastStatus:fresh.lastStatus}); save(); toast(`${s.name}: atualizado.`);
+    const fresh=await buildRemoteSource({name:s.name,type:s.type,url:s.remoteUrl,selectionMode:s.selectionMode||'all',selectedKeys:s.selectedKeys||[]});
+    Object.assign(s,{items:fresh.items,totalAvailable:fresh.totalAvailable,selectionMode:fresh.selectionMode,selectedKeys:fresh.selectedKeys,lastSync:fresh.lastSync,lastStatus:fresh.lastStatus}); save(); toast(`${s.name}: atualizado.`);
   }catch(err){ s.lastStatus=`Erro: ${err.message}`; save(); toast(`${s.name}: não foi possível atualizar.`); }
   layout();
 }
@@ -631,7 +750,7 @@ async function refreshAllSources({silent=false}={}){
   if(!remote.length && !state.drive.connected && !state.epg?.remoteUrl) return toast('Não existem fontes remotas para atualizar.');
   if(!silent) toast('A atualizar fontes…');
   for(const s of remote){
-    try{ const fresh=await buildRemoteSource({name:s.name,type:s.type,url:s.remoteUrl}); Object.assign(s,{items:fresh.items,lastSync:fresh.lastSync,lastStatus:fresh.lastStatus}); }
+    try{ const fresh=await buildRemoteSource({name:s.name,type:s.type,url:s.remoteUrl,selectionMode:s.selectionMode||'all',selectedKeys:s.selectedKeys||[]}); Object.assign(s,{items:fresh.items,totalAvailable:fresh.totalAvailable,selectionMode:fresh.selectionMode,selectedKeys:fresh.selectedKeys,lastSync:fresh.lastSync,lastStatus:fresh.lastStatus}); }
     catch(err){ s.lastStatus=`Erro: ${err.message}`; }
   }
   if(state.drive.connected) await driveSync({silent:true});
@@ -659,7 +778,7 @@ function editSourceModal(id){
     const type=$('#editSourceType').value, url=$('#editSourceUrl').value.trim();
     if(!/^https?:\/\//i.test(url)) return toast('Introduz uma URL http/https válida.');
     const btn=$('#saveSourceEdit');btn.disabled=true;btn.textContent='A testar…';
-    try{const fresh=await buildRemoteSource({name,type,url});Object.assign(src,fresh,{id:src.id});save();closeModal();layout();toast('Fonte atualizada.');}
+    try{const sameCatalog=url===src.remoteUrl&&type===src.type;const fresh=await buildRemoteSource({name,type,url,selectionMode:sameCatalog?(src.selectionMode||'all'):'all',selectedKeys:sameCatalog?(src.selectedKeys||[]):[]});Object.assign(src,fresh,{id:src.id});save();closeModal();layout();toast('Fonte atualizada.');}
     catch(err){btn.disabled=false;btn.textContent='Guardar';toast(`Não foi possível validar: ${err.message}`);}
   });
 }

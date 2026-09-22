@@ -1,17 +1,25 @@
-# RJP Stream V1.2.1 — Build status
+# RJP Stream V1.3 — Build status
 
-Correção desta versão:
-- Corrigido o Java gerado para `RJPHttpPlugin.java`: o `\n` do `BufferedReader` era convertido pelo template JavaScript numa quebra de linha literal dentro de um `char`, causando `illegal line end in character literal`.
-- O gerador passa agora a emitir corretamente `.append('\\n')` no script, resultando em `.append('\n')` no Java gerado.
-- Workflow e metadados atualizados para `1.2.1` / `versionCode 10201`.
+## Alterações principais
+- Análise de fontes M3U/M3U8 e JSON antes da importação.
+- Resumo de itens, categorias e seleção.
+- Seleção por categoria e por canal/stream individual.
+- Pesquisa no catálogo antes de importar.
+- Gestão posterior da seleção em fontes remotas M3U/JSON (`☷`).
+- Atualização manual/automática preserva a seleção guardada.
+- Importação M3U local usa a mesma pré-visualização.
+- `versionName 1.3.0` / `versionCode 10300`.
 
-Validado neste pacote:
-- `node --check scripts/patch-android.mjs`: PASS
-- `node --check src/app.js`: PASS
-- `node scripts/smoke.mjs`: PASS
-- `node scripts/build.mjs`: PASS
-- `node scripts/build-tv.mjs`: PASS
-- Simulação do patch Android: PASS
-- `RJPHttpPlugin.java` gerado contém `text.append(line).append('\n');` válido em Java.
+## Validações executadas
+- `node --check src/app.js`: **PASS**
+- `node --check scripts/patch-android.mjs`: **PASS**
+- `npm run smoke`: **PASS**
+- `npm run test:playlist`: **PASS**
+- `npm run build`: **PASS**
+- `npm run build:tv`: **PASS**
+- Simulação do patch Android executada duas vezes: **PASS / idempotente**
+- Android simulado: `versionCode 10300`, `versionName 1.3.0`: **PASS**
+- `RJPHttpPlugin.java` gerado contém `text.append(line).append('\n');`: **PASS**
+- Registo dos plugins Android sem duplicação após dois patches: **PASS**
 
-O build Gradle final continua a ser executado pelo GitHub Actions.
+O build Gradle final (APK/AAB) continua a ser executado pelo GitHub Actions, onde ficam disponíveis as dependências Android/Gradle completas.

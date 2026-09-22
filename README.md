@@ -1,23 +1,20 @@
-# RJP Stream V1.2.1
+# RJP Stream V1.3
 
-Evolução da V1.0 com foco no uso real diário. Um único código-base adapta-se a telemóvel, tablet, Android TV/Google TV, Samsung Tizen e LG webOS.
+Evolução da V1.2.1 com foco na importação e gestão prática de listas. Um único código-base adapta-se a telemóvel, tablet, Android TV/Google TV, Samsung Tizen e LG webOS.
 
-## Estado V1.2.1
+## Novidades V1.3
 
-- Ecrã inicial passa a usar **conteúdo real das fontes ativas**; foram retirados os cartões fictícios da Home.
-- **Histórico de reprodução** local até 100 itens.
-- **Retomar reprodução** em vídeos com duração conhecida.
-- Barra de progresso nos itens parcialmente vistos.
-- "Recentemente reproduzidos" e "Favoritos" diretamente na Home.
-- Tecla **OK/Enter** passa a abrir cartões focados no modo TV/Android TV.
-- Ação para **limpar histórico** nas Definições.
-- Workflow Android endurecido: não depende de `npm cache` sem lockfile e mostra versões de Node/npm/Java antes do build.
-- Android `versionName 1.2.1` / `versionCode 10201`.
-
-
-### Correção de build 1.2.1
-
-Foi corrigido o gerador do plugin HTTP nativo Android. O template JavaScript estava a transformar `\n` numa quebra de linha real dentro de um literal `char` Java. A V1.2.1 emite agora corretamente `text.append(line).append('\n');`.
+- **Análise de listas antes da importação** por URL M3U/M3U8 ou JSON/RJP Bundle.
+- Mostra imediatamente **quantos itens** e **quantas categorias** foram encontrados.
+- Pré-visualização pesquisável dos canais/streams encontrados.
+- Seleção por **categoria** ou por **item individual** antes de guardar.
+- Botões **Selecionar tudo** e **Limpar seleção**.
+- Em listas grandes, mostra até 300 resultados de cada pesquisa para manter a interface rápida; a seleção por categoria atua sobre a categoria inteira.
+- As fontes remotas M3U/JSON passam a ter botão **Gerir canais (☷)** para voltar a analisar a lista e alterar a seleção.
+- A atualização automática/manual preserva a seleção feita pelo utilizador numa fonte remota.
+- Importação de ficheiro M3U local também passa pelo ecrã de análise antes de guardar.
+- A listagem de fontes mostra `importados de disponíveis` quando foi guardado apenas um subconjunto.
+- Android `versionName 1.3.0` / `versionCode 10300`.
 
 ## Funcionalidades principais
 
@@ -29,9 +26,22 @@ Foi corrigido o gerador do plugin HTTP nativo Android. O template JavaScript est
 - Guia Futebol / Onde ver importável por JSON/Drive.
 - WireGuard nativo em Android/Android TV com configuração cifrada no Android Keystore.
 - Split tunneling: apenas RJP Stream ou todo o dispositivo.
+- Atalhos Web pessoais adicionados manualmente.
 - PWA, Samsung Tizen e LG webOS.
 
 A app não inclui fontes de conteúdo, bypass de DRM, credenciais de serviços ou descoberta automática de streams não autorizados.
+
+## Importar uma lista por URL
+
+1. Abrir **Fontes**.
+2. Carregar em **Analisar URL**.
+3. Dar um nome à fonte.
+4. Escolher `M3U` ou `JSON`.
+5. Colar a URL e carregar em **Analisar fonte**.
+6. A V1.3 apresenta o total de itens, categorias e seleção atual.
+7. Escolher categorias/canais e carregar em **Importar selecionados**.
+
+Para HLS, DASH ou uma URL de vídeo direta, usa **URL / HLS / DASH** e guarda como stream direto.
 
 ## Build Android / Android TV
 
@@ -61,13 +71,10 @@ Saídas: `tv-builds/tizen/` e `tv-builds/webos/`.
 ## Identificação
 
 - Nome: **RJP Stream**
-- Versão: **1.2.1**
+- Versão: **1.3.0**
 - Android appId: `pt.rjp.stream`
 - Autor: RJP
 
+## Correção herdada da V1.2.1
 
-## V1.2 — Atalhos Web pessoais
-- Novo gestor de atalhos Web adicionados manualmente pelo utilizador.
-- Nome + URL, editar, abrir e remover.
-- Os atalhos entram no backup/restauro.
-- Não existe descoberta automática de sites, extração de streams, bypass de DRM ou autenticação.
+Mantém-se a correção do gerador Android para `RJPHttpPlugin.java`, que emite corretamente `text.append(line).append('\n');` no Java gerado.

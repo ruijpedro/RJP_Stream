@@ -1,15 +1,15 @@
-RJP Stream V1.2.1 — validações locais
-Data: 2026-09-19
+RJP Stream V1.3 — validações locais
+Data: 2026-09-22
 
-PASS node --check src/app.js
-PASS node --check scripts/patch-android.mjs
-PASS node scripts/smoke.mjs
-PASS node scripts/build.mjs
-PASS node scripts/build-tv.mjs
-PASS JSON: package/manifest/webOS/Apps Script
-PASS XML: Tizen config
-PASS patch Android executado 2x em skeleton (idempotência)
-PASS versionName 1.1.0 / versionCode 10100 no patch
-PASS plugins RJPVpn/RJPHttp gerados uma única vez
+PASS  node --check src/app.js
+PASS  node --check scripts/patch-android.mjs
+PASS  smoke test
+PASS  playlist analyzer test (M3U, categorias, HLS/DASH, subset selection)
+PASS  build Web/PWA -> dist/
+PASS  build Samsung Tizen -> tv-builds/tizen/
+PASS  build LG webOS -> tv-builds/webos/
+PASS  patch Android simulado duas vezes (idempotência)
+PASS  versionCode 10300 / versionName 1.3.0 no Gradle simulado
+PASS  RJPHttpPlugin.java com append('\\n') válido
 
-O APK/AAB final requer o GitHub Actions para descarregar dependências externas e executar Gradle.
+Nota: APK/AAB final requer o ambiente Gradle/Android do GitHub Actions.

@@ -6,7 +6,7 @@ const required=[
 let ok=true;
 for(const f of required){ if(!fs.existsSync(f)){console.error('Falta:',f);ok=false;} }
 const app=fs.readFileSync('src/app.js','utf8');
-for(const needle of ["APP_VERSION = '1.2.1'",'parseM3U','driveSync','openPlayer','epgForItem','toggleVpn','driveSyncBridge','historyUpsert','recentHistoryItems','epgModal','RJP Stream']){
+for(const needle of ["APP_VERSION = '1.3.0'",'parseM3U','driveSync','openPlayer','epgForItem','toggleVpn','driveSyncBridge','historyUpsert','recentHistoryItems','epgModal','playlistPreviewModal','loadRemoteCatalog','manageRemoteSource','RJP Stream']){
   if(!app.includes(needle)){console.error('app.js sem',needle);ok=false;}
 }
 const patch=fs.readFileSync('scripts/patch-android.mjs','utf8');
@@ -14,4 +14,4 @@ for(const needle of ['RJPVpnPlugin','com.wireguard.android:tunnel:1.0.20260102',
   if(!patch.includes(needle)){console.error('patch Android sem',needle);ok=false;}
 }
 if(!ok) process.exit(1);
-console.log('Smoke test RJP Stream V1.2.1 OK');
+console.log('Smoke test RJP Stream V1.3 OK');
