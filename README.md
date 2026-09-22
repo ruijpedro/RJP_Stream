@@ -1,8 +1,8 @@
-# RJP Stream V1.2
+# RJP Stream V1.2.1
 
 Evolução da V1.0 com foco no uso real diário. Um único código-base adapta-se a telemóvel, tablet, Android TV/Google TV, Samsung Tizen e LG webOS.
 
-## Novidades V1.1
+## Estado V1.2.1
 
 - Ecrã inicial passa a usar **conteúdo real das fontes ativas**; foram retirados os cartões fictícios da Home.
 - **Histórico de reprodução** local até 100 itens.
@@ -12,7 +12,12 @@ Evolução da V1.0 com foco no uso real diário. Um único código-base adapta-s
 - Tecla **OK/Enter** passa a abrir cartões focados no modo TV/Android TV.
 - Ação para **limpar histórico** nas Definições.
 - Workflow Android endurecido: não depende de `npm cache` sem lockfile e mostra versões de Node/npm/Java antes do build.
-- Android `versionName 1.2.0` / `versionCode 10200`.
+- Android `versionName 1.2.1` / `versionCode 10201`.
+
+
+### Correção de build 1.2.1
+
+Foi corrigido o gerador do plugin HTTP nativo Android. O template JavaScript estava a transformar `\n` numa quebra de linha real dentro de um literal `char` Java. A V1.2.1 emite agora corretamente `text.append(line).append('\n');`.
 
 ## Funcionalidades principais
 
@@ -56,7 +61,7 @@ Saídas: `tv-builds/tizen/` e `tv-builds/webos/`.
 ## Identificação
 
 - Nome: **RJP Stream**
-- Versão: **1.2.0**
+- Versão: **1.2.1**
 - Android appId: `pt.rjp.stream`
 - Autor: RJP
 

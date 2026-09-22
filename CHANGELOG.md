@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 1.2.1 — 2026-09-22
+- Corrigido erro de compilação Java em `RJPHttpPlugin.java`: `illegal line end in character literal`.
+- Corrigido escape de nova linha no gerador Android (`patch-android.mjs`).
+- Atualizados workflow, Web/PWA e webOS para 1.2.1.
+- `versionName 1.2.1`, `versionCode 10201`.
+
 ## 1.2.0 — 2026-09-22
 - Adicionado gestor de **Atalhos Web pessoais** na área Fontes.
 - Permite adicionar manualmente nome + URL, editar, abrir e remover.

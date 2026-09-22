@@ -1,4 +1,4 @@
-RJP Stream V1.1 — validações locais
+RJP Stream V1.2.1 — validações locais
 Data: 2026-09-19
 
 PASS node --check src/app.js

@@ -64,8 +64,8 @@ const wgDep=`implementation 'com.wireguard.android:tunnel:1.0.20260102'`;
 if(!gradle.includes('com.wireguard.android:tunnel')){
   gradle=gradle.replace(/dependencies\s*\{/, m=>`${m}\n    ${wgDep}\n`);
 }
-gradle=gradle.replace(/versionCode\s+\d+/, 'versionCode 10200');
-gradle=gradle.replace(/versionName\s+["'][^"']+["']/, 'versionName "1.2.0"');
+gradle=gradle.replace(/versionCode\s+\d+/, 'versionCode 10201');
+gradle=gradle.replace(/versionName\s+["'][^"']+["']/, 'versionName "1.2.1"');
 fs.writeFileSync(appGradle,gradle);
 
 // WireGuard 1.0.20260102 requires API 24+.
@@ -344,7 +344,7 @@ public class RJPHttpPlugin extends Plugin {
                 conn.setConnectTimeout(15000);
                 conn.setReadTimeout(20000);
                 conn.setRequestMethod(method);
-                conn.setRequestProperty("User-Agent", "RJPStream/1.1 Android");
+                conn.setRequestProperty("User-Agent", "RJPStream/1.2.1 Android");
                 Iterator<String> keys = headers.keys();
                 while (keys.hasNext()) {
                     String key = keys.next();
@@ -361,7 +361,7 @@ public class RJPHttpPlugin extends Plugin {
                 StringBuilder text = new StringBuilder();
                 if (in != null) {
                     try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                        String line; while ((line = r.readLine()) != null) text.append(line).append('\n');
+                        String line; while ((line = r.readLine()) != null) text.append(line).append('\\n');
                     }
                 }
                 JSObject out = new JSObject(); out.put("status", status); out.put("body", text.toString());
@@ -374,4 +374,4 @@ public class RJPHttpPlugin extends Plugin {
 `;
 fs.writeFileSync(path.join(javaDir,'RJPHttpPlugin.java'),httpPlugin);
 
-console.log('RJP Stream V1.1 Android preparado: telemóvel/tablet/TV + IconKitchen + banner + WireGuard + HTTP nativos.');
+console.log('RJP Stream V1.2.1 Android preparado: telemóvel/tablet/TV + IconKitchen + banner + WireGuard + HTTP nativos.');

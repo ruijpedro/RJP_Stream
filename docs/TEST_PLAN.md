@@ -1,4 +1,4 @@
-# RJP Stream V1.1 — Test Plan
+# RJP Stream V1.2.1 — Test Plan
 
 ## Web / PWA
 - Abrir em 360×800, 1024×768 e 1920×1080.
