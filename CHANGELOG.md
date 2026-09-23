@@ -1,34 +1,41 @@
 # CHANGELOG
 
+## 1.5.0 — 2026-09-23
+- Novo indexador de catálogo Web para os Atalhos Web adicionados pelo utilizador.
+- Deteção de filmes, séries/episódios e programas por JSON-LD e elementos visíveis no HTML.
+- Cada site mostra contadores de jogos e itens de catálogo.
+- Novo botão `☷ Ver catálogo` por site, com pesquisa e filtro Filmes/Séries/Programas.
+- Separadores Filmes, Séries e TV passam a mostrar os títulos indexados nos sites.
+- Pesquisa global inclui catálogo Web.
+- Atualização manual/automática reindexa jogos e catálogo.
+- Mantida a regra de não extrair URLs de vídeo, players, DRM, tokens ou autenticação.
+- `versionName 1.5.0`, `versionCode 10500`.
+
+## 1.4.0 — 2026-09-22
+- Adicionado indexador de jogos nos Atalhos Web adicionados pelo utilizador.
+- Ação `⚽ Listar jogos` em cada site.
+- Ação `Futebol → Atualizar sites` para atualizar todos os sites configurados.
+- Leitura de JSON-LD `SportsEvent/Event` e deteção heurística de fixtures no HTML visível.
+- Lista agregada de jogos por equipas/data/hora, com indicação dos sites onde cada jogo foi encontrado.
+- Botão para abrir a página pública do evento em cada site.
+- Guardados `games`, `lastScan`, `scanStatus` e `scanGames` por Atalho Web.
+- Atualização global/automática inclui os sites marcados para análise.
+- O indexador ignora links diretos de media (`m3u/m3u8/mpd/mp4/mkv/ts`) e não extrai players, DRM, tokens ou autenticação.
+- Mantidas as funções de análise/seletor de M3U/M3U8/JSON da V1.3.
+- `versionName 1.4.0`, `versionCode 10400`.
+
 ## 1.3.0 — 2026-09-22
-- Adicionada análise de listas M3U/M3U8 e JSON antes da importação.
+- Análise de listas M3U/M3U8 e JSON antes da importação.
 - Resumo com total de itens, categorias e número selecionado.
-- Pesquisa dentro da lista antes de importar.
-- Seleção por categoria e por canal/stream individual.
-- Fontes remotas M3U/JSON ganham ação `Gerir canais` para rever a seleção.
-- Atualizações de fontes remotas preservam a seleção guardada.
-- Importação M3U local passa pela mesma pré-visualização.
-- Fontes mostram `X de Y` itens quando existe seleção parcial.
-- `versionName 1.3.0`, `versionCode 10300`.
+- Pesquisa e seleção por categoria/canal antes de importar.
+- Fontes remotas M3U/JSON ganham `Gerir canais`.
 
 ## 1.2.1 — 2026-09-22
 - Corrigido erro de compilação Java em `RJPHttpPlugin.java`: `illegal line end in character literal`.
-- Corrigido escape de nova linha no gerador Android (`patch-android.mjs`).
-- `versionName 1.2.1`, `versionCode 10201`.
+- Corrigido escape de nova linha no gerador Android.
 
 ## 1.2.0 — 2026-09-22
-- Adicionado gestor de **Atalhos Web pessoais** na área Fontes.
-- Permite adicionar manualmente nome + URL, editar, abrir e remover.
-- Atalhos ficam persistidos e incluídos no backup.
-- Mantém o core agnóstico: sem descoberta automática, scraping ou bypass de DRM/autenticação.
-- `versionName 1.2.0`, `versionCode 10200`.
+- Gestor de Atalhos Web pessoais.
 
 ## 1.1.0 — 2026-09-19
-- Home passa a usar fontes reais em vez de conteúdo fictício.
-- Adicionado histórico local até 100 reproduções.
-- Adicionada retoma automática de VOD e progresso de reprodução.
-- Recentes e Favoritos surgem na Home.
-- Navegação TV melhorada: Enter/OK abre cartões focados.
-- Botão para limpar histórico.
-- Workflow Android sem cache npm dependente de lockfile.
-- `versionName 1.1.0`, `versionCode 10100`.
+- Home com fontes reais, histórico, retoma e melhorias de navegação TV.

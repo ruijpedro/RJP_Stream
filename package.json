@@ -1,8 +1,8 @@
 {
   "name": "rjp-stream",
-  "version": "1.3.0",
+  "version": "1.5.0",
   "private": true,
-  "description": "RJP Stream V1.3 - agregador multimédia responsivo com fontes e atalhos Web pessoais",
+  "description": "RJP Stream V1.5 - agregador multimédia responsivo com fontes, indexação de jogos, filmes, séries e programas em atalhos Web pessoais",
   "scripts": {
     "build": "node scripts/build.mjs",
     "smoke": "node scripts/smoke.mjs",

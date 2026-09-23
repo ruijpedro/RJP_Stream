@@ -1,24 +1,49 @@
-# RJP Stream V1.3
+# RJP Stream V1.5
 
-Evolução da V1.2.1 com foco na importação e gestão prática de listas. Um único código-base adapta-se a telemóvel, tablet, Android TV/Google TV, Samsung Tizen e LG webOS.
+Evolução da V1.4 com foco em **listar o que está disponível nos sites adicionados**. Para além dos jogos, a aplicação passa a indexar metadados públicos de **filmes, séries e programas** visíveis na página adicionada e a apresentá-los nos respetivos separadores.
 
-## Novidades V1.3
+## Novidades V1.5
 
-- **Análise de listas antes da importação** por URL M3U/M3U8 ou JSON/RJP Bundle.
-- Mostra imediatamente **quantos itens** e **quantas categorias** foram encontrados.
-- Pré-visualização pesquisável dos canais/streams encontrados.
-- Seleção por **categoria** ou por **item individual** antes de guardar.
-- Botões **Selecionar tudo** e **Limpar seleção**.
-- Em listas grandes, mostra até 300 resultados de cada pesquisa para manter a interface rápida; a seleção por categoria atua sobre a categoria inteira.
-- As fontes remotas M3U/JSON passam a ter botão **Gerir canais (☷)** para voltar a analisar a lista e alterar a seleção.
-- A atualização automática/manual preserva a seleção feita pelo utilizador numa fonte remota.
-- Importação de ficheiro M3U local também passa pelo ecrã de análise antes de guardar.
-- A listagem de fontes mostra `importados de disponíveis` quando foi guardado apenas um subconjunto.
-- Android `versionName 1.3.0` / `versionCode 10300`.
+- **Catálogo Web por Atalho Web**.
+- Ao adicionar/editar um site podes ativar separadamente:
+  - procura de jogos;
+  - listagem de filmes, séries e programas.
+- Cada site mostra agora contadores de **Jogos** e **Catálogo**.
+- Botão **☷ Ver catálogo** em cada Atalho Web.
+- O catálogo por site tem pesquisa e filtros: **Filmes / Séries / Programas**.
+- Os títulos indexados aparecem automaticamente em:
+  - **Filmes** → filmes encontrados nos sites;
+  - **Séries** → séries/episódios encontrados nos sites;
+  - **TV** → programas/shows encontrados nos sites;
+  - **Futebol** → jogos encontrados nos sites.
+- A pesquisa global também pesquisa o catálogo Web.
+- Deteção por JSON-LD (`Movie`, `TVSeries`, `TVEpisode`, `BroadcastEvent` e tipos relacionados) e por cartões/links visíveis no HTML.
+- Guarda apenas metadados de catálogo: título, categoria, imagem quando disponível, descrição curta/metadados e **link da página pública**.
+- Atualização global e atualização automática voltam a indexar os sites configurados.
+- Android `versionName 1.5.0` / `versionCode 10500`.
 
-## Funcionalidades principais
+## Como usar
+
+1. Abrir **Fontes**.
+2. Em **Atalhos Web pessoais**, escolher **Adicionar**.
+3. Dar um nome e colar a URL da página que contém a lista pretendida.
+4. Ativar **Procurar jogos** e/ou **Listar filmes, séries e programas**.
+5. Guardar; a app faz a primeira indexação.
+6. No site guardado, usar **☷** para ver todo o catálogo que foi detetado ou **↻** para atualizar.
+7. Abrir **Filmes**, **Séries**, **TV** ou **Futebol** para ver as listas agregadas dos sites adicionados.
+
+Se um site tiver páginas separadas para Filmes/Séries/Programas, podes adicionar cada página como um Atalho Web para obter uma listagem mais completa.
+
+## Limites do indexador Web
+
+A V1.5 indexa apenas **metadados públicos** devolvidos no HTML/JSON-LD da página adicionada. Não extrai URLs de vídeo, iframes/players, tokens, DRM, credenciais ou mecanismos de autenticação.
+
+Sites que constroem o catálogo exclusivamente depois de executar JavaScript podem não ser detetados. No browser, Samsung e LG, uma origem também pode bloquear leitura por CORS. No APK Android/Android TV, a app dispõe do fallback HTTP nativo já existente.
+
+## Restantes funcionalidades
 
 - Gestor de fontes M3U/M3U8, HLS, DASH, URL e JSON/RJP Bundle.
+- Pré-visualização e seleção de canais/categorias antes de importar.
 - EPG/XMLTV com programa atual/próximo e progresso.
 - Google Drive por OAuth Web ou Apps Script Bridge.
 - Player HTML5 + HLS.js + dash.js.
@@ -26,22 +51,8 @@ Evolução da V1.2.1 com foco na importação e gestão prática de listas. Um �
 - Guia Futebol / Onde ver importável por JSON/Drive.
 - WireGuard nativo em Android/Android TV com configuração cifrada no Android Keystore.
 - Split tunneling: apenas RJP Stream ou todo o dispositivo.
-- Atalhos Web pessoais adicionados manualmente.
+- Interface responsiva para telemóvel, tablet e TV.
 - PWA, Samsung Tizen e LG webOS.
-
-A app não inclui fontes de conteúdo, bypass de DRM, credenciais de serviços ou descoberta automática de streams não autorizados.
-
-## Importar uma lista por URL
-
-1. Abrir **Fontes**.
-2. Carregar em **Analisar URL**.
-3. Dar um nome à fonte.
-4. Escolher `M3U` ou `JSON`.
-5. Colar a URL e carregar em **Analisar fonte**.
-6. A V1.3 apresenta o total de itens, categorias e seleção atual.
-7. Escolher categorias/canais e carregar em **Importar selecionados**.
-
-Para HLS, DASH ou uma URL de vídeo direta, usa **URL / HLS / DASH** e guarda como stream direto.
 
 ## Build Android / Android TV
 
@@ -57,7 +68,7 @@ cd android
 ./gradlew assembleDebug bundleDebug --stacktrace
 ```
 
-O workflow `.github/workflows/build-android.yml` executa estes passos e publica APK + AAB debug.
+O workflow `.github/workflows/build-android.yml` publica APK + AAB debug.
 
 ## Samsung / LG
 
@@ -71,10 +82,6 @@ Saídas: `tv-builds/tizen/` e `tv-builds/webos/`.
 ## Identificação
 
 - Nome: **RJP Stream**
-- Versão: **1.3.0**
+- Versão: **1.5.0**
 - Android appId: `pt.rjp.stream`
 - Autor: RJP
-
-## Correção herdada da V1.2.1
-
-Mantém-se a correção do gerador Android para `RJPHttpPlugin.java`, que emite corretamente `text.append(line).append('\n');` no Java gerado.

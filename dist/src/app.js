@@ -1,9 +1,9 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-const APP_VERSION = '1.3.0';
-const STORAGE_KEY = 'rjpStreamStateV13';
-const LEGACY_KEYS = ['rjpStreamStateV12','rjpStreamStateV11','rjpStreamStateV10','rjpStreamStateV3','rjpStreamStateV2','rjpStreamState'];
+const APP_VERSION = '1.5.0';
+const STORAGE_KEY = 'rjpStreamStateV15';
+const LEGACY_KEYS = ['rjpStreamStateV14','rjpStreamStateV13','rjpStreamStateV12','rjpStreamStateV11','rjpStreamStateV10','rjpStreamStateV3','rjpStreamStateV2','rjpStreamState'];
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const GIS_URL = 'https://accounts.google.com/gsi/client';
 const HLS_JS_URL = 'https://cdn.jsdelivr.net/npm/hls.js@1.7.2/dist/hls.min.js';
@@ -219,9 +219,13 @@ function filteredItems(){
 function libraryPage(title, icon, cats){
   const sourceChannels = filteredItems().slice(0,100);
   const groups = [...new Set(activeItems().map(x=>x.group).filter(Boolean))].slice(0,10);
-  return `<div class="panel"><div class="section-head"><div><h2>${icon} ${title}</h2><div class="sub">${sourceChannels.length ? `${sourceChannels.length} item(ns) visíveis` : 'Importa uma fonte para preencher esta área'}</div></div><button class="btn primary" data-nav="fontes">＋ Fonte</button></div>
+  const kind = title.startsWith('Filmes') ? 'movie' : title.startsWith('Séries') ? 'series' : title.startsWith('TV') ? 'program' : '';
+  const webItems = kind ? webCatalogItems(kind).slice(0,120) : [];
+  const webSection = webItems.length ? `<div class="section"><div class="section-head"><div><h2>${kind==='movie'?'🎬 Filmes':kind==='series'?'📚 Séries':'📺 Programas'} encontrados nos sites</h2><div class="sub">${webItems.length} título(s) públicos indexados nos atalhos Web adicionados.</div></div><button class="btn" data-nav="fontes">Gerir sites</button></div><div class="cards web-catalog-grid">${webItems.map(webCatalogCard).join('')}</div></div>` : '';
+  return `<div class="panel"><div class="section-head"><div><h2>${icon} ${title}</h2><div class="sub">${sourceChannels.length ? `${sourceChannels.length} item(ns) visíveis` : webItems.length ? `${webItems.length} título(s) encontrados nos sites` : 'Importa uma fonte ou indexa um site para preencher esta área'}</div></div><button class="btn primary" data-nav="fontes">＋ Fonte</button></div>
     <div class="searchbar"><input id="channelSearch" value="${escapeHtml(state.channelSearch)}" placeholder="Pesquisar canais, grupos ou títulos…"><button class="btn" id="clearChannelSearch">Limpar</button></div>
     <div class="category-grid">${(groups.length?groups:cats).map(c=>`<button class="cat" data-group-filter="${escapeHtml(c)}"><span>${icon}</span><span>${escapeHtml(c)}</span></button>`).join('')}</div></div>
+  ${webSection}
   <div class="section"><div class="section-head"><div><h2>Da tua biblioteca</h2><div class="sub">Mostramos no máximo 100 itens de cada vez para manter a interface leve.</div></div></div><div class="cards">${(sourceChannels.length?sourceChannels:featured).map((x,i)=>{
       const sourceMode = sourceChannels.length>0;
       const n=sourceMode?x.name:x[0], epg=sourceMode?epgForItem(x):null, m=sourceMode?(x.group||x.type||'Canal'):x[1];
@@ -232,6 +236,25 @@ function libraryPage(title, icon, cats){
       return `<article class="media-card channel-card ${epg?.now?'has-epg':''}" tabindex="0" ${url?`data-stream="${encodeURIComponent(url)}" data-stream-type="${escapeHtml(x.type||detectStreamType(url))}" data-stream-name="${escapeHtml(n)}" data-stream-group="${escapeHtml(m)}" data-stream-logo="${escapeHtml(logo)}"`:''}>${url?`<button class="fav-btn ${isFav?'on':''}" data-fav-url="${encodeURIComponent(url)}" data-fav-name="${escapeHtml(n)}" data-fav-type="${escapeHtml(x.type||detectStreamType(url))}" data-fav-group="${escapeHtml(m)}" data-fav-logo="${escapeHtml(logo)}" title="Favorito">${isFav?'★':'☆'}</button>`:''}${logo?`<img class="channel-logo" src="${escapeHtml(logo)}" alt="" referrerpolicy="no-referrer">`:''}<strong>${escapeHtml(n)}</strong><small>${escapeHtml(m)}</small>${epgHtml}${x.tvgId?`<span class="micro tvg-id">${escapeHtml(x.tvgId)}</span>`:''}</article>`;
     }).join('')}</div></div>`;
 }
+
+function webCatalogItems(kind='',applyFilter=true){
+  const out=[];
+  for(const p of (state.webProviders||[])){
+    for(const item of (p.catalog||[])){
+      if(kind && item.kind!==kind) continue;
+      out.push({...item,providerId:p.id,providerName:p.name||'Site',rootUrl:p.url});
+    }
+  }
+  const q=applyFilter?normalizeText(state.channelSearch||''):'';
+  return (q?out.filter(x=>normalizeText(`${x.title||''} ${x.subtitle||''} ${x.genre||''} ${x.providerName||''}`).includes(q)):out)
+    .sort((a,b)=>String(a.title||'').localeCompare(String(b.title||''),'pt'));
+}
+function webCatalogCard(x){
+  const icon=x.kind==='movie'?'🎬':x.kind==='series'?'📚':x.kind==='program'?'📺':'◼';
+  const meta=[x.subtitle,x.genre,x.providerName].filter(Boolean).join(' · ');
+  return `<article class="media-card web-catalog-card" tabindex="0" data-catalog-page="${encodeURIComponent(x.pageUrl||x.rootUrl||'')}">${x.image?`<img class="catalog-poster" src="${escapeHtml(x.image)}" alt="" referrerpolicy="no-referrer">`:`<div class="catalog-placeholder">${icon}</div>`}<strong>${escapeHtml(x.title||'Sem título')}</strong><small>${escapeHtml(meta||catalogKindLabel(x.kind))}</small><span class="micro">${escapeHtml(catalogKindLabel(x.kind))}</span></article>`;
+}
+function catalogKindLabel(kind=''){return kind==='movie'?'Filme':kind==='series'?'Série':kind==='program'?'Programa':'Conteúdo';}
 
 function sourcesPage(){
   const stats = sourceStats();
@@ -254,7 +277,7 @@ function sourcesPage(){
   <div class="section"><div class="section-head"><div><h2>Fontes</h2><div class="sub">Ativar, atualizar, editar ou remover sem reinstalar a app.</div></div></div>
     <div class="searchbar"><input id="sourceSearch" value="${escapeHtml(state.sourceSearch)}" placeholder="Pesquisar fonte…"><button class="btn" id="clearSourceSearch">Limpar</button></div>
     <div class="list">${visibleSources.length?visibleSources.map(sourceRow).join(''):'<div class="panel empty"><p>Ainda não existem fontes. Usa uma das opções acima.</p></div>'}</div></div>
-  <div class="section"><div class="section-head"><div><h2>Atalhos Web pessoais</h2><div class="sub">Links adicionados manualmente por ti. A RJP Stream não os descobre nem valida como fornecedores de conteúdo.</div></div><button class="btn" id="addWebProvider2">＋ Adicionar</button></div>
+  <div class="section"><div class="section-head"><div><h2>Atalhos Web pessoais</h2><div class="sub">Links adicionados manualmente por ti. A V1.5 indexa jogos e catálogos públicos (filmes, séries e programas) visíveis na página, sem extrair o stream.</div></div><button class="btn" id="addWebProvider2">＋ Adicionar</button></div>
     <div class="list">${(state.webProviders||[]).length?(state.webProviders||[]).map(webProviderRow).join(''):'<div class="panel empty"><p>Sem atalhos Web. Podes adicionar um nome e uma URL manualmente.</p></div>'}</div></div>`;
 }
 
@@ -268,21 +291,29 @@ function sourceRow(s){
 }
 
 function webProviderRow(p){
-  const last=p.addedAt?new Date(p.addedAt).toLocaleDateString('pt-PT'):'—';
-  return `<div class="list-row source-row"><div class="source-symbol">🌐</div><div><b>${escapeHtml(p.name||'Atalho Web')}</b><div class="meta">WEB · ${escapeHtml(shortOrigin(p.url||''))}</div><div class="micro">Adicionado: ${escapeHtml(last)}</div></div><div class="row-actions"><button class="icon-btn" data-open-web-provider="${p.id}" title="Abrir">↗</button><button class="icon-btn" data-edit-web-provider="${p.id}" title="Editar">✎</button><button class="icon-btn" data-delete-web-provider="${p.id}" title="Remover">✕</button></div></div>`;
+  const scan=p.lastScan?new Date(p.lastScan).toLocaleString('pt-PT'):'Nunca';
+  const games=(p.games||[]).length, catalog=(p.catalog||[]).length;
+  return `<div class="list-row source-row"><div class="source-symbol">🌐</div><div><b>${escapeHtml(p.name||'Atalho Web')}</b><div class="meta">WEB · ${escapeHtml(shortOrigin(p.url||''))}</div><div class="micro">Jogos: ${games} · Catálogo: ${catalog} · Última análise: ${escapeHtml(scan)}${p.scanStatus?` · ${escapeHtml(p.scanStatus)}`:''}</div></div><div class="row-actions"><button class="icon-btn" data-view-web-catalog="${p.id}" title="Ver catálogo">☷</button><button class="icon-btn" data-scan-web-provider="${p.id}" title="Atualizar índice">↻</button><button class="icon-btn" data-open-web-provider="${p.id}" title="Abrir">↗</button><button class="icon-btn" data-edit-web-provider="${p.id}" title="Editar">✎</button><button class="icon-btn" data-delete-web-provider="${p.id}" title="Remover">✕</button></div></div>`;
 }
 
 function webProviderModal(id=''){
   const existing=(state.webProviders||[]).find(x=>x.id===id) || null;
-  modal(`<div class="modal-head"><h3>${existing?'Editar':'Adicionar'} atalho Web</h3><button class="icon-btn" data-close>✕</button></div><div class="field"><label>Nome</label><input id="webProviderName" value="${escapeHtml(existing?.name||'')}" placeholder="Ex.: Portal pessoal"></div><div class="field top-gap"><label>URL</label><input id="webProviderUrl" value="${escapeHtml(existing?.url||'')}" placeholder="https://..."></div><div class="note top-gap">Este campo guarda apenas um atalho introduzido manualmente. Não existe descoberta automática, extração de streams, bypass de DRM ou autenticação.</div><button class="btn primary top-gap" id="saveWebProvider">Guardar</button>`);
-  $('#saveWebProvider').addEventListener('click',()=>{
+  modal(`<div class="modal-head"><h3>${existing?'Editar':'Adicionar'} atalho Web</h3><button class="icon-btn" data-close>✕</button></div><div class="field"><label>Nome</label><input id="webProviderName" value="${escapeHtml(existing?.name||'')}" placeholder="Ex.: Portal pessoal"></div><div class="field top-gap"><label>URL</label><input id="webProviderUrl" value="${escapeHtml(existing?.url||'')}" placeholder="https://..."></div><label class="checkline top-gap"><input type="checkbox" id="webProviderScanGames" ${existing?.scanGames===false?'':'checked'}><span>Procurar jogos publicados nesta página</span></label><label class="checkline top-gap"><input type="checkbox" id="webProviderScanCatalog" ${existing?.scanCatalog===false?'':'checked'}><span>Listar filmes, séries e programas visíveis nesta página</span></label><div class="note top-gap">A RJP Stream V1.5 indexa apenas metadados públicos visíveis/estruturados da página (títulos, imagens, categoria, horário e link da página). Não extrai URLs de vídeo, players incorporados, DRM, tokens ou autenticação. Sites carregados apenas por JavaScript podem não ser detetados.</div><button class="btn primary top-gap" id="saveWebProvider">Guardar</button>`);
+  $('#saveWebProvider').addEventListener('click',async()=>{
     const name=$('#webProviderName').value.trim()||'Atalho Web';
     const url=$('#webProviderUrl').value.trim();
+    const scanGames=$('#webProviderScanGames').checked;
+    const scanCatalog=$('#webProviderScanCatalog').checked;
     if(!/^https?:\/\//i.test(url)) return toast('Introduz uma URL http/https válida.');
     state.webProviders=state.webProviders||[];
-    if(existing) Object.assign(existing,{name,url});
-    else state.webProviders.push({id:randomId(),name,url,addedAt:new Date().toISOString()});
+    let target=existing;
+    if(existing) Object.assign(existing,{name,url,scanGames,scanCatalog});
+    else {
+      target={id:randomId(),name,url,scanGames,scanCatalog,addedAt:new Date().toISOString(),games:[],catalog:[]};
+      state.webProviders.push(target);
+    }
     save();closeModal();layout();toast('Atalho Web guardado.');
+    if(scanGames||scanCatalog) await scanWebProvider(target.id);
   });
 }
 
@@ -297,14 +328,266 @@ function deleteWebProvider(id){
   $('#confirmDeleteWebProvider').addEventListener('click',()=>{state.webProviders=(state.webProviders||[]).filter(x=>x.id!==id);save();closeModal();layout();});
 }
 
+function cleanSiteText(value=''){
+  return String(value).replace(/\s+/g,' ').replace(/\u00a0/g,' ').trim();
+}
+function safeEventPageUrl(value='',baseUrl=''){
+  try{
+    const u=new URL(value||baseUrl,baseUrl);
+    if(!/^https?:$/i.test(u.protocol)) return '';
+    if(/\.(?:m3u8?|mpd|mp4|mkv|ts)(?:$|[?#])/i.test(u.href)) return '';
+    return u.href;
+  }catch{return '';}
+}
+function splitFixtureTitle(raw='',allowDash=false){
+  let text=cleanSiteText(raw)
+    .replace(/\b(?:live|ao vivo|watch live|stream live|in play)\b/ig,' ')
+    .replace(/\s+/g,' ').trim();
+  if(text.length<5 || text.length>180) return null;
+  const timeMatch=text.match(/\b(?:[01]?\d|2[0-3]):[0-5]\d\b/);
+  const timeText=timeMatch?.[0]||'';
+  text=text.replace(/\b(?:[01]?\d|2[0-3]):[0-5]\d\b/g,' ').replace(/\s+/g,' ').trim();
+  const strong=/\s+(?:vs\.?|v\.?|×|x)\s+/i;
+  let parts=null;
+  if(strong.test(text)) parts=text.split(strong);
+  else if((allowDash||timeText||/\b\d{1,2}[\/.]\d{1,2}\b/.test(raw))&&/\s+[–—-]\s+/.test(text)) parts=text.split(/\s+[–—-]\s+/);
+  if(!parts||parts.length!==2) return null;
+  const trimTeam=t=>cleanSiteText(t).replace(/^[•·|:–—-]+|[•·|:–—-]+$/g,'').trim();
+  const home=trimTeam(parts[0]), away=trimTeam(parts[1]);
+  if(home.length<2 || away.length<2 || home.length>80 || away.length>80) return null;
+  if(/^\d+$/.test(home)||/^\d+$/.test(away)) return null;
+  return {home,away,timeText};
+}
+function parseEventDate(value='',fallbackText=''){
+  const raw=cleanSiteText(value);
+  if(raw){
+    const t=Date.parse(raw);
+    if(Number.isFinite(t)) return new Date(t).toISOString();
+  }
+  const text=cleanSiteText(fallbackText);
+  const full=text.match(/\b(\d{1,2})[\/.-](\d{1,2})(?:[\/.-](\d{2,4}))?\s+(?:às?\s+)?((?:[01]?\d|2[0-3]):[0-5]\d)\b/i);
+  if(full){
+    let y=full[3]?+full[3]:new Date().getFullYear(); if(y<100)y+=2000;
+    const [hh,mm]=full[4].split(':').map(Number);
+    const d=new Date(y,+full[2]-1,+full[1],hh,mm,0,0);
+    if(!Number.isNaN(d.getTime())) return d.toISOString();
+  }
+  return '';
+}
+function extractSiteGames(html,baseUrl,providerName='Site'){
+  if(typeof DOMParser==='undefined') return [];
+  const doc=new DOMParser().parseFromString(String(html||''),'text/html');
+  const out=[], seen=new Set();
+  const add=(game={})=>{
+    const home=cleanSiteText(game.home||''), away=cleanSiteText(game.away||'');
+    if(!home||!away) return;
+    const key=normalizeText(`${home}|${away}|${game.kickoff||game.timeText||''}`);
+    if(seen.has(key)) return; seen.add(key);
+    out.push({
+      home,away,
+      competition:cleanSiteText(game.competition||providerName||'Site'),
+      kickoff:game.kickoff||'',
+      timeText:cleanSiteText(game.timeText||''),
+      status:game.status==='live'?'live':'scheduled',
+      pageUrl:safeEventPageUrl(game.pageUrl||baseUrl,baseUrl),
+      detectedFrom:game.detectedFrom||'html'
+    });
+  };
+  const visitJson=value=>{
+    if(Array.isArray(value)){value.forEach(visitJson);return;}
+    if(!value||typeof value!=='object')return;
+    const types=[value['@type']].flat().filter(Boolean).map(String);
+    if(types.some(t=>/SportsEvent|Event/i.test(t))){
+      const home=value.homeTeam?.name||value.competitor?.[0]?.name||'';
+      const away=value.awayTeam?.name||value.competitor?.[1]?.name||'';
+      const split=(!home||!away)?splitFixtureTitle(value.name||'',true):null;
+      add({
+        home:home||split?.home,away:away||split?.away,
+        competition:value.superEvent?.name||value.sport||providerName,
+        kickoff:parseEventDate(value.startDate||'',value.name||''),
+        timeText:split?.timeText||'',
+        status:/live|inprogress/i.test(String(value.eventStatus||''))?'live':'scheduled',
+        pageUrl:value.url||baseUrl,detectedFrom:'json-ld'
+      });
+    }
+    Object.values(value).forEach(visitJson);
+  };
+  doc.querySelectorAll('script[type="application/ld+json"]').forEach(el=>{
+    try{visitJson(JSON.parse(el.textContent||''));}catch{}
+  });
+  const selectors='a,h1,h2,h3,h4,li,article,[data-event],[class*="match"],[class*="fixture"],[class*="game"],[class*="event"]';
+  const nodes=[...doc.querySelectorAll(selectors)].slice(0,2500);
+  for(const node of nodes){
+    const text=cleanSiteText(node.textContent||'');
+    if(text.length<5||text.length>220)continue;
+    const cls=String(node.className||'');
+    const split=splitFixtureTitle(text,/match|fixture|game|event/i.test(cls)); if(!split)continue;
+    const time=node.querySelector?.('time[datetime]')?.getAttribute('datetime')||node.getAttribute?.('datetime')||'';
+    const anchor=node.matches?.('a[href]')?node:node.querySelector?.('a[href]');
+    add({
+      ...split,
+      competition:node.getAttribute?.('data-competition')||providerName,
+      kickoff:parseEventDate(time,text),
+      status:/\b(?:live|ao vivo|in play)\b/i.test(text)?'live':'scheduled',
+      pageUrl:anchor?.getAttribute('href')||baseUrl,detectedFrom:'html'
+    });
+    if(out.length>=400)break;
+  }
+  return out.slice(0,400);
+}
+function inferCatalogKind(value=''){
+  const t=normalizeText(value);
+  if(/(?:tvseries|tv-series|series|serie|season|temporada|episode|episodio|episodes)/.test(t)) return 'series';
+  if(/(?:movie|movies|film|films|filme|filmes|cinema)/.test(t)) return 'movie';
+  if(/(?:tvshow|tv-show|programme|programa|programas|broadcast|emissao|emissões|show|shows|channel|canal)/.test(t)) return 'program';
+  return '';
+}
+function cleanCatalogTitle(value=''){
+  const t=cleanSiteText(value).replace(/\s*[|•·]\s*[^|•·]{1,50}$/,'').trim();
+  if(t.length<2||t.length>150) return '';
+  const bad=/^(?:home|inicio|início|menu|login|sign in|register|search|pesquisar|explore|explorar|more|mais|next|previous|voltar|back|privacy|terms|contact|about|categories|categorias)$/i;
+  return bad.test(t)?'':t;
+}
+function safeCatalogPageUrl(value='',baseUrl=''){
+  try{
+    const u=new URL(value||baseUrl,baseUrl);
+    if(!/^https?:$/i.test(u.protocol)) return '';
+    if(/\.(?:m3u8?|mpd|mp4|mkv|ts|avi|mov|webm)(?:$|[?#])/i.test(u.href)) return '';
+    return u.href;
+  }catch{return '';}
+}
+function imageValue(v='',baseUrl=''){
+  const raw=Array.isArray(v)?v[0]:typeof v==='object'?(v?.url||v?.contentUrl||''):v;
+  try{const u=new URL(String(raw||''),baseUrl);return /^https?:$/i.test(u.protocol)?u.href:'';}catch{return '';}
+}
+function extractSiteCatalog(html,baseUrl,providerName='Site'){
+  if(typeof DOMParser==='undefined') return [];
+  const doc=new DOMParser().parseFromString(String(html||''),'text/html');
+  const out=[], seen=new Set();
+  const add=(item={})=>{
+    const title=cleanCatalogTitle(item.title||item.name||''); if(!title)return;
+    const pageUrl=safeCatalogPageUrl(item.pageUrl||item.url||baseUrl,baseUrl); if(!pageUrl)return;
+    const context=`${item.kind||''} ${item.type||''} ${item.className||''} ${pageUrl} ${title} ${item.subtitle||''}`;
+    const kind=item.kind||inferCatalogKind(context); if(!kind)return;
+    const key=normalizeText(`${kind}|${title}|${pageUrl}`); if(seen.has(key))return; seen.add(key);
+    out.push({
+      title,kind,
+      subtitle:cleanSiteText(item.subtitle||''),
+      genre:Array.isArray(item.genre)?item.genre.join(', '):cleanSiteText(item.genre||''),
+      image:imageValue(item.image||'',baseUrl),
+      pageUrl,
+      published:cleanSiteText(item.published||''),
+      detectedFrom:item.detectedFrom||'html'
+    });
+  };
+  const visitJson=value=>{
+    if(Array.isArray(value)){value.forEach(visitJson);return;}
+    if(!value||typeof value!=='object')return;
+    const types=[value['@type']].flat().filter(Boolean).map(String);
+    const typeText=types.join(' ');
+    const kind=inferCatalogKind(typeText);
+    if(kind){
+      const subtitle=value.partOfSeries?.name||value.partOfSeason?.name||value.description||'';
+      add({title:value.name||value.headline||'',kind,type:typeText,subtitle,genre:value.genre||'',image:value.image||value.thumbnailUrl||'',pageUrl:value.url||value.mainEntityOfPage||baseUrl,published:value.datePublished||value.startDate||'',detectedFrom:'json-ld'});
+    }
+    Object.values(value).forEach(visitJson);
+  };
+  doc.querySelectorAll('script[type="application/ld+json"]').forEach(el=>{try{visitJson(JSON.parse(el.textContent||''));}catch{}});
+  const selectors='a[href],article,[data-title],[class*="movie"],[class*="film"],[class*="series"],[class*="show"],[class*="program"],[class*="episode"],[class*="card"],[class*="poster"],[class*="item"]';
+  const nodes=[...doc.querySelectorAll(selectors)].slice(0,3500);
+  for(const node of nodes){
+    const anchor=node.matches?.('a[href]')?node:node.querySelector?.('a[href]');
+    const href=anchor?.getAttribute?.('href')||''; if(!href)continue;
+    const className=cleanSiteText(`${node.className||''} ${anchor?.className||''}`);
+    const img=node.querySelector?.('img');
+    const title=cleanCatalogTitle(node.getAttribute?.('data-title')||node.getAttribute?.('aria-label')||anchor?.getAttribute?.('title')||img?.getAttribute?.('alt')||node.querySelector?.('[class*="title"],h1,h2,h3,h4')?.textContent||node.textContent||'');
+    if(!title)continue;
+    const kind=inferCatalogKind(`${className} ${href} ${title}`); if(!kind)continue;
+    const subtitle=cleanSiteText(node.querySelector?.('[class*="meta"],[class*="genre"],[class*="year"],[class*="season"]')?.textContent||'');
+    add({title,kind,className,subtitle,image:img?.getAttribute?.('src')||img?.getAttribute?.('data-src')||'',pageUrl:href,detectedFrom:'html'});
+    if(out.length>=600)break;
+  }
+  return out.slice(0,600);
+}
+function providerCatalogModal(id){
+  const p=(state.webProviders||[]).find(x=>x.id===id); if(!p)return;
+  const all=p.catalog||[];
+  const counts={movie:0,series:0,program:0}; all.forEach(x=>{if(counts[x.kind]!==undefined)counts[x.kind]++;});
+  modal(`<div class="modal-head"><h3>Catálogo · ${escapeHtml(p.name||'Site')}</h3><button class="icon-btn" data-close>✕</button></div><div class="kpi-grid"><div class="kpi"><b>${all.length}</b><small>Total</small></div><div class="kpi"><b>${counts.movie}</b><small>Filmes</small></div><div class="kpi"><b>${counts.series}</b><small>Séries</small></div><div class="kpi"><b>${counts.program}</b><small>Programas</small></div></div><div class="searchbar top-gap"><input id="catalogSearch" placeholder="Pesquisar título…"><select id="catalogKind"><option value="">Tudo</option><option value="movie">Filmes</option><option value="series">Séries</option><option value="program">Programas</option></select></div><div id="catalogResults" class="catalog-modal-list top-gap"></div><div class="button-row top-gap"><button class="btn primary" id="rescanCatalog">↻ Atualizar índice</button><button class="btn" data-close>Fechar</button></div><div class="note top-gap">São listados apenas títulos e links públicos encontrados na página adicionada. A app não extrai nem desbloqueia o vídeo.</div>`);
+  const render=()=>{
+    const q=normalizeText($('#catalogSearch')?.value||''), kind=$('#catalogKind')?.value||'';
+    const hits=all.filter(x=>(!kind||x.kind===kind)&&(!q||normalizeText(`${x.title} ${x.subtitle} ${x.genre}`).includes(q))).slice(0,250);
+    $('#catalogResults').innerHTML=hits.length?hits.map(x=>`<button class="search-hit catalog-hit" data-catalog-page="${encodeURIComponent(x.pageUrl||p.url)}"><span>${x.image?`<img class="catalog-thumb" src="${escapeHtml(x.image)}" alt="" referrerpolicy="no-referrer">`:''}<b>${escapeHtml(x.title)}</b><small>${escapeHtml([catalogKindLabel(x.kind),x.subtitle||x.genre].filter(Boolean).join(' · '))}</small></span><span>↗</span></button>`).join(''):'<p class="muted">Nenhum título encontrado com este filtro.</p>';
+    $$('[data-catalog-page]',$('#catalogResults')).forEach(b=>b.addEventListener('click',()=>{const u=decodeURIComponent(b.dataset.catalogPage||'');if(u)window.open(u,'_blank','noopener,noreferrer');}));
+  };
+  $('#catalogSearch').addEventListener('input',debounce(render,100)); $('#catalogKind').addEventListener('change',render); render();
+  $('#rescanCatalog').addEventListener('click',async()=>{closeModal();await scanWebProvider(id);providerCatalogModal(id);});
+}
+
+async function scanWebProvider(id,{silent=false,rerender=true}={}){
+  const p=(state.webProviders||[]).find(x=>x.id===id); if(!p?.url)return [];
+  if(!silent) toast(`A indexar ${p.name||'site'}…`);
+  p.scanStatus='A analisar…'; save(); if(rerender)layout();
+  try{
+    const html=await fetchText(p.url,20000,{'Accept':'text/html,application/xhtml+xml'});
+    const games=p.scanGames===false?[]:extractSiteGames(html,p.url,p.name||'Site');
+    const catalog=p.scanCatalog===false?[]:extractSiteCatalog(html,p.url,p.name||'Site');
+    p.games=games; p.catalog=catalog;
+    p.lastScan=new Date().toISOString();
+    p.scanStatus=`${games.length} jogo(s) · ${catalog.length} título(s)`;
+    save(); if(rerender)layout();
+    if(!silent) toast(`${p.name}: ${games.length} jogo(s) e ${catalog.length} título(s) encontrados.`);
+    return games;
+  }catch(err){
+    p.lastScan=new Date().toISOString();p.scanStatus=`Erro: ${err?.message||err}`;save();if(rerender)layout();
+    if(!silent)toast(`${p.name}: não foi possível analisar o site.`);
+    return [];
+  }
+}
+async function scanAllWebProviders({silent=false,rerender=true}={}){
+  const providers=(state.webProviders||[]).filter(p=>(p.scanGames!==false||p.scanCatalog!==false)&&/^https?:\/\//i.test(p.url||''));
+  if(!providers.length){if(!silent)toast('Não existem sites configurados para indexação.');return [];}
+  if(!silent)toast(`A indexar ${providers.length} site(s)…`);
+  const all=[];
+  for(const p of providers) all.push(...await scanWebProvider(p.id,{silent:true,rerender:false}));
+  save();if(rerender)layout();
+  if(!silent){
+    const titles=providers.reduce((n,p)=>n+(p.catalog?.length||0),0);
+    toast(`${all.length} jogo(s) e ${titles} título(s) encontrados nos sites adicionados.`);
+  }
+  return all;
+}
+function combinedFootballGames(){
+  const map=new Map();
+  const put=(g,provider=null)=>{
+    const key=normalizeText(`${g.home||''}|${g.away||''}|${(g.kickoff||'').slice(0,16)}|${g.timeText||''}`);
+    if(!key.replace(/\|/g,''))return;
+    let item=map.get(key);
+    if(!item){item={...g,broadcasters:[...(g.broadcasters||[])],providers:[]};map.set(key,item);}
+    if(provider&&!item.providers.some(x=>x.providerId===provider.providerId&&x.pageUrl===provider.pageUrl))item.providers.push(provider);
+  };
+  (state.footballGames||[]).forEach(g=>put(g));
+  for(const p of (state.webProviders||[])){
+    for(const g of (p.games||[]))put(g,{providerId:p.id,name:p.name||'Site',rootUrl:p.url,pageUrl:g.pageUrl||p.url,detectedFrom:g.detectedFrom||'html'});
+  }
+  return [...map.values()];
+}
+
 function footballPage(){
-  const games=(state.footballGames||[]).slice().sort((a,b)=>new Date(a.kickoff||0)-new Date(b.kickoff||0));
+  const games=combinedFootballGames().slice().sort((a,b)=>{
+    const at=a.kickoff?new Date(a.kickoff).getTime():Number.MAX_SAFE_INTEGER;
+    const bt=b.kickoff?new Date(b.kickoff).getTime():Number.MAX_SAFE_INTEGER;
+    return at-bt;
+  });
+  const indexedSites=(state.webProviders||[]).filter(p=>(p.games||[]).length).length;
   const cards=games.length?games.map((g,i)=>{
-    const when=g.kickoff?new Date(g.kickoff).toLocaleString('pt-PT',{dateStyle:'short',timeStyle:'short'}):'Hora por definir';
+    const when=g.kickoff?new Date(g.kickoff).toLocaleString('pt-PT',{dateStyle:'short',timeStyle:'short'}):(g.timeText||'Hora por definir');
     const bc=(g.broadcasters||[]).map((b,j)=>`<button class="country broadcaster" data-broadcaster-url="${escapeHtml(b.url||'')}" ${b.url?'':'disabled'}><b>${escapeHtml((b.flag?b.flag+' ':'')+(b.country||'Região'))}</b><span class="channel">${escapeHtml(b.name||b.channel||'—')}</span><span class="pill">${escapeHtml(b.quality||'TV')}</span></button>`).join('');
-    return `<div class="panel game-card"><div class="section-head"><div><div class="eyebrow">${escapeHtml(g.competition||'FUTEBOL')}</div><h2>${escapeHtml(g.home||'Casa')} × ${escapeHtml(g.away||'Fora')}</h2><div class="sub">${escapeHtml(when)}${g.venue?` · ${escapeHtml(g.venue)}`:''}</div></div><span class="pill ${g.status==='live'?'on':''}">${g.status==='live'?'AO VIVO':'AGENDADO'}</span></div><div class="country-list">${bc||'<div class="note">Sem broadcasters adicionados para este jogo.</div>'}</div></div>`;
-  }).join(''):`<div class="panel empty"><h2>⚽ Guia de futebol</h2><p class="muted">Ainda não há jogos carregados. Importa um guia JSON local ou coloca <code>footballGames</code> em <code>config/rjp-stream.json</code> no Google Drive.</p></div>`;
-  return `<div class="hero football-hero"><div class="hero-main short"><div class="hero-copy"><div class="eyebrow">FUTEBOL</div><h2>Onde ver</h2><p>Guia de jogos e broadcasters por país/região. Os dados podem vir do teu Drive ou de um ficheiro JSON.</p><div class="hero-actions"><button class="btn primary" id="importFootballGuide">⬆ Importar guia</button><button class="btn" id="footballExample">Ver formato JSON</button></div></div></div><div class="panel"><h3>Resumo</h3><div class="kpi-grid two"><div class="kpi"><b>${games.length}</b><small>Jogos</small></div><div class="kpi"><b>${games.reduce((n,g)=>n+(g.broadcasters?.length||0),0)}</b><small>Broadcasters</small></div></div></div></div><div class="section"><div class="section-head"><div><h2>Jogos</h2><div class="sub">Os direitos de transmissão variam por território; confirma sempre no broadcaster oficial.</div></div></div><div class="list football-list">${cards}</div></div>`;
+    const sites=(g.providers||[]).map(p=>`<button class="country provider-link" data-provider-page="${encodeURIComponent(p.pageUrl||p.rootUrl||'')}" ${p.pageUrl||p.rootUrl?'':'disabled'}><b>🌐 ${escapeHtml(p.name||'Site')}</b><span class="channel">Abrir página do evento</span><span class="pill">SITE</span></button>`).join('');
+    const sections=`${bc?`<div class="provider-section-label">Broadcasters / guia</div>${bc}`:''}${sites?`<div class="provider-section-label">Encontrado nos sites adicionados</div>${sites}`:''}`;
+    return `<div class="panel game-card"><div class="section-head"><div><div class="eyebrow">${escapeHtml(g.competition||'FUTEBOL')}</div><h2>${escapeHtml(g.home||'Casa')} × ${escapeHtml(g.away||'Fora')}</h2><div class="sub">${escapeHtml(when)}${g.venue?` · ${escapeHtml(g.venue)}`:''}</div></div><span class="pill ${g.status==='live'?'on':''}">${g.status==='live'?'AO VIVO':'AGENDADO'}</span></div><div class="country-list">${sections||'<div class="note">Sem origem associada a este jogo.</div>'}</div></div>`;
+  }).join(''):`<div class="panel empty"><h2>⚽ Jogos disponíveis</h2><p class="muted">Ainda não há jogos indexados. Adiciona um site em Fontes e usa “Atualizar sites”, ou importa um guia JSON/Drive.</p></div>`;
+  return `<div class="hero football-hero"><div class="hero-main short"><div class="hero-copy"><div class="eyebrow">FUTEBOL</div><h2>Jogos disponíveis</h2><p>A V1.5 pode ler jogos publicados nas páginas adicionadas e reuni-los aqui; filmes, séries e programas aparecem também nos respetivos separadores.</p><div class="hero-actions"><button class="btn primary" id="scanAllFootballSites">↻ Atualizar sites</button><button class="btn" id="importFootballGuide">⬆ Importar guia</button><button class="btn" id="footballExample">Formato JSON</button></div></div></div><div class="panel"><h3>Resumo</h3><div class="kpi-grid"><div class="kpi"><b>${games.length}</b><small>Jogos</small></div><div class="kpi"><b>${indexedSites}</b><small>Sites com jogos</small></div><div class="kpi"><b>${games.reduce((n,g)=>n+(g.broadcasters?.length||0),0)}</b><small>Broadcasters</small></div></div></div></div><div class="note section">O indexador lê apenas metadados públicos da página (títulos, equipas, horários e links de página). O catálogo de filmes/séries/programas é mostrado nos respetivos separadores. Não extrai URLs de vídeo, players, DRM, tokens ou autenticação. Em sites totalmente dinâmicos, a deteção pode não encontrar eventos.</div><div class="section"><div class="section-head"><div><h2>Jogos</h2><div class="sub">Resultados agregados do teu guia e dos sites adicionados.</div></div></div><div class="list football-list">${cards}</div></div>`;
 }
 
 function favoritesPage(){
@@ -317,7 +600,7 @@ function settingsPage(){
   return `<div class="kpi-grid"><div class="kpi"><b>${p.label}</b><small>Layout detetado</small></div><div class="kpi"><b>${window.innerWidth}×${window.innerHeight}</b><small>Área útil CSS</small></div><div class="kpi"><b>${window.devicePixelRatio || 1}×</b><small>Densidade de píxeis</small></div><div class="kpi"><b>${APP_VERSION}</b><small>Versão</small></div></div>
   <div class="section panel"><h2 class="panel-title">Interface e atualização</h2><div class="form-grid"><div class="field"><label>Modo</label><select id="layoutMode"><option value="auto" ${state.layout==='auto'?'selected':''}>Automático</option><option value="compact" ${state.layout==='compact'?'selected':''}>Compacto</option><option value="normal" ${state.layout==='normal'?'selected':''}>Normal</option><option value="tv" ${state.layout==='tv'?'selected':''}>TV à distância</option></select></div><div class="field"><label>Pasta Google Drive</label><input id="driveFolder" value="${escapeHtml(state.drive.folderName||'RJP Stream')}" /></div><div class="field"><label>Atualização automática de fontes</label><select id="autoRefresh"><option value="0" ${+state.autoRefreshMinutes===0?'selected':''}>Desativada</option><option value="15" ${+state.autoRefreshMinutes===15?'selected':''}>15 minutos</option><option value="30" ${+state.autoRefreshMinutes===30?'selected':''}>30 minutos</option><option value="60" ${+state.autoRefreshMinutes===60?'selected':''}>1 hora</option><option value="180" ${+state.autoRefreshMinutes===180?'selected':''}>3 horas</option><option value="360" ${+state.autoRefreshMinutes===360?'selected':''}>6 horas</option></select></div><div class="field"><label>Última atualização automática</label><input value="${state.lastAutoRefresh?new Date(state.lastAutoRefresh).toLocaleString('pt-PT'):'—'}" disabled></div></div></div>
   <div class="section panel"><div class="section-head"><div><h2>Google Drive</h2><div class="sub">Liga a tua própria credencial OAuth e sincroniza M3U/JSON/EPG a partir da pasta escolhida.</div></div><button class="btn ${state.drive.connected?'primary':''}" id="driveSettingsBtn">${state.drive.connected?'Sincronizar':'Configurar Drive'}</button></div><div class="status-grid"><div><span>Estado</span><b>${state.drive.connected?'Ligado':'Desligado'}</b></div><div><span>Última sync</span><b>${state.drive.lastSync?new Date(state.drive.lastSync).toLocaleString('pt-PT'):'—'}</b></div></div></div>
-  <div class="section panel"><div class="section-head"><div><h2>VPN WireGuard</h2><div class="sub">No APK Android/Android TV a V1.3 usa o túnel WireGuard nativo. No browser, Samsung e LG esta opção fica apenas informativa.</div></div><button class="btn ${state.vpn?'primary':''}" id="vpnToggle">${state.vpn?'Desligar':'Ligar'} VPN</button></div><div class="form-grid"><div class="field"><label>Encaminhamento</label><select id="vpnScope"><option value="app" ${state.vpnSplitOnly?'selected':''}>Só RJP Stream</option><option value="device" ${!state.vpnSplitOnly?'selected':''}>Todo o dispositivo</option></select></div><div class="field"><label>Motor</label><input value="${nativeVpnAvailable()?'WireGuard Android nativo':'Indisponível nesta plataforma'}" disabled></div></div><div class="source-actions compact-actions"><button class="source-action" id="importWG"><span class="bigicon">🛡</span><b>Importar WireGuard</b><small>${state.wireguard?escapeHtml(state.wireguard.name):'Ficheiro .conf'}</small></button><button class="source-action" id="backupMenu2"><span class="bigicon">💾</span><b>Backup</b><small>Guardar fontes e definições</small></button><button class="source-action" id="clearHistory"><span class="bigicon">🕘</span><b>Limpar histórico</b><small>${(state.history||[]).length} item(ns) reproduzidos</small></button></div><div class="note">A configuração WireGuard é guardada cifrada pelo Android Keystore no APK. O backup web não exporta a chave privada. Samsung Tizen e LG webOS não expõem às apps comuns uma VPN de sistema equivalente ao Android VpnService.</div></div>`;
+  <div class="section panel"><div class="section-head"><div><h2>VPN WireGuard</h2><div class="sub">No APK Android/Android TV a V1.5 usa o túnel WireGuard nativo. No browser, Samsung e LG esta opção fica apenas informativa.</div></div><button class="btn ${state.vpn?'primary':''}" id="vpnToggle">${state.vpn?'Desligar':'Ligar'} VPN</button></div><div class="form-grid"><div class="field"><label>Encaminhamento</label><select id="vpnScope"><option value="app" ${state.vpnSplitOnly?'selected':''}>Só RJP Stream</option><option value="device" ${!state.vpnSplitOnly?'selected':''}>Todo o dispositivo</option></select></div><div class="field"><label>Motor</label><input value="${nativeVpnAvailable()?'WireGuard Android nativo':'Indisponível nesta plataforma'}" disabled></div></div><div class="source-actions compact-actions"><button class="source-action" id="importWG"><span class="bigicon">🛡</span><b>Importar WireGuard</b><small>${state.wireguard?escapeHtml(state.wireguard.name):'Ficheiro .conf'}</small></button><button class="source-action" id="backupMenu2"><span class="bigicon">💾</span><b>Backup</b><small>Guardar fontes e definições</small></button><button class="source-action" id="clearHistory"><span class="bigicon">🕘</span><b>Limpar histórico</b><small>${(state.history||[]).length} item(ns) reproduzidos</small></button></div><div class="note">A configuração WireGuard é guardada cifrada pelo Android Keystore no APK. O backup web não exporta a chave privada. Samsung Tizen e LG webOS não expõem às apps comuns uma VPN de sistema equivalente ao Android VpnService.</div></div>`;
 }
 
 function bindCommon(){
@@ -327,6 +610,7 @@ function bindCommon(){
   $('#globalSearchBtn')?.addEventListener('click', globalSearchModal);
   $$('[data-home-group]').forEach(el=>el.addEventListener('click',()=>{state.page='tv';state.channelSearch=el.dataset.homeGroup||'';save();layout();}));
   $$('[data-stream]').forEach(el=>el.addEventListener('click',()=>openStreamElement(el)));
+  $$('[data-catalog-page]').forEach(el=>el.addEventListener('click',()=>{const u=decodeURIComponent(el.dataset.catalogPage||'');if(u)window.open(u,'_blank','noopener,noreferrer');}));
   $('#homeDriveSetup')?.addEventListener('click',driveModal);
   $('#channelSearch')?.addEventListener('input',debounce(e=>{state.channelSearch=e.target.value; save(); layout();},220));
   $('#clearChannelSearch')?.addEventListener('click',()=>{state.channelSearch='';save();layout();});
@@ -334,7 +618,9 @@ function bindCommon(){
   $$('[data-fav-url]').forEach(b=>b.addEventListener('click',e=>{e.preventDefault();e.stopPropagation();toggleFavoriteItem(b);}));
   $('#importFootballGuide')?.addEventListener('click',()=>$('#footballFileInput').click());
   $('#footballExample')?.addEventListener('click',footballExampleModal);
+  $('#scanAllFootballSites')?.addEventListener('click',()=>scanAllWebProviders());
   $$('[data-broadcaster-url]').forEach(b=>b.addEventListener('click',()=>{const u=b.dataset.broadcasterUrl;if(u) window.open(u,'_blank','noopener,noreferrer');}));
+  $$('[data-provider-page]').forEach(b=>b.addEventListener('click',()=>{const u=decodeURIComponent(b.dataset.providerPage||'');if(u) window.open(u,'_blank','noopener,noreferrer');}));
   bindSources();
   bindSettings();
 }
@@ -373,6 +659,8 @@ function bindSources(){
   $$('[data-open-web-provider]').forEach(b=>b.addEventListener('click',()=>openWebProvider(b.dataset.openWebProvider)));
   $$('[data-edit-web-provider]').forEach(b=>b.addEventListener('click',()=>webProviderModal(b.dataset.editWebProvider)));
   $$('[data-delete-web-provider]').forEach(b=>b.addEventListener('click',()=>deleteWebProvider(b.dataset.deleteWebProvider)));
+  $$('[data-scan-web-provider]').forEach(b=>b.addEventListener('click',()=>scanWebProvider(b.dataset.scanWebProvider)));
+  $$('[data-view-web-catalog]').forEach(b=>b.addEventListener('click',()=>providerCatalogModal(b.dataset.viewWebCatalog))); 
 }
 
 function bindSettings(){
@@ -677,7 +965,7 @@ function upsertSource(source){
 function randomId(){ return globalThis.crypto?.randomUUID?.() || `rjp-${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 
 function urlModal(direct){
-  modal(`<div class="modal-head"><h3>${direct?'Adicionar stream':'Analisar fonte por URL'}</h3><button class="icon-btn" data-close>✕</button></div><div class="form-grid"><div class="field"><label>Nome</label><input id="urlName" placeholder="Ex.: TV Casa"></div><div class="field"><label>Tipo</label><select id="urlType">${direct?'<option>URL</option><option>HLS</option><option>DASH</option><option>M3U</option><option>JSON</option>':'<option>M3U</option><option>JSON</option><option>HLS</option><option>DASH</option><option>URL</option>'}</select></div></div><div class="field top-gap"><label>URL</label><input id="urlValue" placeholder="https://..."></div><div class="note top-gap">Na V1.3, listas M3U/M3U8 e JSON são analisadas primeiro: a app mostra quantos itens e categorias encontrou e deixa escolher o que importar. Fontes remotas podem ser bloqueadas por CORS no browser/TV; no APK Android é usada a camada HTTP nativa quando necessário.</div><button class="btn primary top-gap" id="saveUrl">${direct?'Guardar e testar':'Analisar fonte'}</button>`);
+  modal(`<div class="modal-head"><h3>${direct?'Adicionar stream':'Analisar fonte por URL'}</h3><button class="icon-btn" data-close>✕</button></div><div class="form-grid"><div class="field"><label>Nome</label><input id="urlName" placeholder="Ex.: TV Casa"></div><div class="field"><label>Tipo</label><select id="urlType">${direct?'<option>URL</option><option>HLS</option><option>DASH</option><option>M3U</option><option>JSON</option>':'<option>M3U</option><option>JSON</option><option>HLS</option><option>DASH</option><option>URL</option>'}</select></div></div><div class="field top-gap"><label>URL</label><input id="urlValue" placeholder="https://..."></div><div class="note top-gap">Na V1.5, listas M3U/M3U8 e JSON são analisadas primeiro: a app mostra quantos itens e categorias encontrou e deixa escolher o que importar. Fontes remotas podem ser bloqueadas por CORS no browser/TV; no APK Android é usada a camada HTTP nativa quando necessário.</div><button class="btn primary top-gap" id="saveUrl">${direct?'Guardar e testar':'Analisar fonte'}</button>`);
   $('#saveUrl').addEventListener('click',async()=>{
     const name=$('#urlName').value.trim()||'Fonte remota', type=$('#urlType').value, url=$('#urlValue').value.trim();
     if(!/^https?:\/\//i.test(url)) return toast('Introduz uma URL http/https válida.');
@@ -747,7 +1035,8 @@ async function refreshSourceById(id){
 
 async function refreshAllSources({silent=false}={}){
   const remote=state.sources.filter(s=>s.remoteUrl && s.originType!=='drive');
-  if(!remote.length && !state.drive.connected && !state.epg?.remoteUrl) return toast('Não existem fontes remotas para atualizar.');
+  const webSites=(state.webProviders||[]).filter(p=>(p.scanGames!==false||p.scanCatalog!==false)&&p.url);
+  if(!remote.length && !state.drive.connected && !state.epg?.remoteUrl && !webSites.length) return toast('Não existem fontes remotas ou sites para atualizar.');
   if(!silent) toast('A atualizar fontes…');
   for(const s of remote){
     try{ const fresh=await buildRemoteSource({name:s.name,type:s.type,url:s.remoteUrl,selectionMode:s.selectionMode||'all',selectedKeys:s.selectedKeys||[]}); Object.assign(s,{items:fresh.items,totalAvailable:fresh.totalAvailable,selectionMode:fresh.selectionMode,selectedKeys:fresh.selectedKeys,lastSync:fresh.lastSync,lastStatus:fresh.lastStatus}); }
@@ -758,6 +1047,7 @@ async function refreshAllSources({silent=false}={}){
     try{applyEpg(await fetchText(state.epg.remoteUrl,20000),state.epg.name||'EPG remoto',state.epg.remoteUrl);}
     catch(err){console.warn('EPG remoto',err);}
   }
+  await scanAllWebProviders({silent:true,rerender:false});
   save(); layout(); if(!silent) toast('Atualização concluída.');
 }
 
@@ -800,14 +1090,19 @@ function exportBackup(){
 
 function globalSearchModal(){
   const items=activeItems();
-  modal(`<div class="modal-head"><h3>Pesquisar</h3><button class="icon-btn" data-close>✕</button></div><div class="field"><label>Canal, grupo ou título</label><input id="globalSearch" placeholder="Escreve para pesquisar…" autofocus></div><div id="searchResults" class="search-results"><p class="muted">${items.length} item(ns) disponíveis nas fontes ativas.</p></div>`);
+  const web=webCatalogItems('',false);
+  modal(`<div class="modal-head"><h3>Pesquisar</h3><button class="icon-btn" data-close>✕</button></div><div class="field"><label>Canal, grupo, filme, série ou programa</label><input id="globalSearch" placeholder="Escreve para pesquisar…" autofocus></div><div id="searchResults" class="search-results"><p class="muted">${items.length} item(ns) nas fontes e ${web.length} título(s) indexados nos sites.</p></div>`);
   const input=$('#globalSearch');
   const render=()=>{
     const q=normalizeText(input.value);
-    if(!q){ $('#searchResults').innerHTML=`<p class="muted">${items.length} item(ns) disponíveis nas fontes ativas.</p>`; return; }
-    const hits=items.filter(x=>normalizeText(`${x.name} ${x.group}`).includes(q)).slice(0,40);
-    $('#searchResults').innerHTML=hits.length?hits.map(x=>`<button class="search-hit" data-hit-url="${encodeURIComponent(x.url||'')}" data-hit-type="${escapeHtml(x.type||detectStreamType(x.url||''))}" data-hit-name="${escapeHtml(x.name||'Stream')}" data-hit-group="${escapeHtml(x.group||'')}" data-hit-logo="${escapeHtml(x.logo||'')}"><span><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.group||x.type||'')}</small></span><span>▶</span></button>`).join(''):'<p class="muted">Sem resultados.</p>';
+    if(!q){ $('#searchResults').innerHTML=`<p class="muted">${items.length} item(ns) nas fontes e ${web.length} título(s) indexados nos sites.</p>`; return; }
+    const hits=items.filter(x=>normalizeText(`${x.name} ${x.group}`).includes(q)).slice(0,25);
+    const webHits=web.filter(x=>normalizeText(`${x.title} ${x.subtitle} ${x.genre} ${x.providerName}`).includes(q)).slice(0,25);
+    const streamHtml=hits.map(x=>`<button class="search-hit" data-hit-url="${encodeURIComponent(x.url||'')}" data-hit-type="${escapeHtml(x.type||detectStreamType(x.url||''))}" data-hit-name="${escapeHtml(x.name||'Stream')}" data-hit-group="${escapeHtml(x.group||'')}" data-hit-logo="${escapeHtml(x.logo||'')}"><span><b>${escapeHtml(x.name)}</b><small>${escapeHtml(x.group||x.type||'')}</small></span><span>▶</span></button>`).join('');
+    const webHtml=webHits.map(x=>`<button class="search-hit" data-search-catalog="${encodeURIComponent(x.pageUrl||x.rootUrl||'')}"><span><b>${escapeHtml(x.title)}</b><small>${escapeHtml(`${catalogKindLabel(x.kind)} · ${x.providerName||'Site'}`)}</small></span><span>↗</span></button>`).join('');
+    $('#searchResults').innerHTML=(streamHtml||webHtml)?`${streamHtml}${webHtml}`:'<p class="muted">Sem resultados.</p>';
     $$('[data-hit-url]').forEach(b=>b.addEventListener('click',()=>openPlayer({name:b.dataset.hitName||b.querySelector('b')?.textContent||'Stream',url:decodeURIComponent(b.dataset.hitUrl||''),type:b.dataset.hitType||'',group:b.dataset.hitGroup||'',logo:b.dataset.hitLogo||''})));
+    $$('[data-search-catalog]').forEach(b=>b.addEventListener('click',()=>{const u=decodeURIComponent(b.dataset.searchCatalog||'');if(u)window.open(u,'_blank','noopener,noreferrer');}));
   };
   input.addEventListener('input',debounce(render,120));
   setTimeout(()=>input.focus(),50);
@@ -1071,7 +1366,7 @@ async function autoRefreshTick(){
   const minutes=Math.max(0,+state.autoRefreshMinutes||0); if(!minutes) return;
   const last=state.lastAutoRefresh?new Date(state.lastAutoRefresh).getTime():0;
   if(last && Date.now()-last < minutes*60*1000*0.9) return;
-  const hasRemote=state.sources.some(s=>s.remoteUrl)||state.drive.connected||!!state.epg?.remoteUrl; if(!hasRemote) return;
+  const hasRemote=state.sources.some(s=>s.remoteUrl)||state.drive.connected||!!state.epg?.remoteUrl||(state.webProviders||[]).some(p=>(p.scanGames!==false||p.scanCatalog!==false)&&p.url); if(!hasRemote) return;
   try{await refreshAllSources({silent:true});state.lastAutoRefresh=new Date().toISOString();save();}
   catch(err){console.warn('Auto refresh',err);}
 }

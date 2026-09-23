@@ -1,4 +1,4 @@
-# RJP Stream V1.3 — Test Plan
+# RJP Stream V1.5 — Test Plan
 
 ## Fontes / análise de listas
 - Abrir **Fontes → Analisar URL**.

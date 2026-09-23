@@ -1,4 +1,4 @@
-# VPN WireGuard — RJP Stream V1.3
+# VPN WireGuard — RJP Stream V1.5
 
 No Android/Android TV, a aplicação integra a biblioteca `com.wireguard.android:tunnel:1.0.20260102` e usa o Android `VpnService`.
 

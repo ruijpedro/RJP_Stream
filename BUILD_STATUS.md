@@ -1,25 +1,25 @@
-# RJP Stream V1.3 — Build status
+# RJP Stream V1.5 — Build status
 
 ## Alterações principais
-- Análise de fontes M3U/M3U8 e JSON antes da importação.
-- Resumo de itens, categorias e seleção.
-- Seleção por categoria e por canal/stream individual.
-- Pesquisa no catálogo antes de importar.
-- Gestão posterior da seleção em fontes remotas M3U/JSON (`☷`).
-- Atualização manual/automática preserva a seleção guardada.
-- Importação M3U local usa a mesma pré-visualização.
-- `versionName 1.3.0` / `versionCode 10300`.
+- Indexação de **jogos + catálogo Web** nos Atalhos Web.
+- Catálogo classificado em **Filmes, Séries e Programas**.
+- Visualização por site com pesquisa/filtros.
+- Integração do catálogo nos separadores Filmes, Séries, TV e na pesquisa global.
+- `versionName 1.5.0` / `versionCode 10500`.
 
 ## Validações executadas
 - `node --check src/app.js`: **PASS**
 - `node --check scripts/patch-android.mjs`: **PASS**
-- `npm run smoke`: **PASS**
-- `npm run test:playlist`: **PASS**
-- `npm run build`: **PASS**
-- `npm run build:tv`: **PASS**
-- Simulação do patch Android executada duas vezes: **PASS / idempotente**
-- Android simulado: `versionCode 10300`, `versionName 1.3.0`: **PASS**
-- `RJPHttpPlugin.java` gerado contém `text.append(line).append('\n');`: **PASS**
+- `node scripts/smoke.mjs`: **PASS**
+- `node scripts/test-playlist.mjs`: **PASS**
+- `node scripts/build.mjs`: **PASS**
+- `node scripts/build-tv.mjs`: **PASS**
+- Patch Android simulado duas vezes: **PASS / idempotente**
+- Android simulado: `versionCode 10500`, `versionName 1.5.0`: **PASS**
+- `RJPHttpPlugin.java` gerado contém `text.append(line).append('\\n');`: **PASS**
 - Registo dos plugins Android sem duplicação após dois patches: **PASS**
 
-O build Gradle final (APK/AAB) continua a ser executado pelo GitHub Actions, onde ficam disponíveis as dependências Android/Gradle completas.
+## Nota do indexador Web
+O parser depende do HTML/JSON-LD que a página devolve. Sites com CORS ou renderização exclusivamente JavaScript podem não ser indexados no browser/TV. O APK Android dispõe de fallback HTTP nativo. A V1.5 indexa apenas metadados e links de página; não extrai URLs de vídeo, players, DRM, tokens ou autenticação.
+
+O build Gradle final (APK/AAB) continua preparado no GitHub Actions.
