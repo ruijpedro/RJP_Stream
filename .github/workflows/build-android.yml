@@ -1,4 +1,4 @@
-name: Build RJP Stream V1.3 Android
+name: Build RJP Stream V1.5 Android
 on:
   workflow_dispatch:
   push:
@@ -37,7 +37,7 @@ jobs:
         run: chmod +x gradlew && ./gradlew assembleDebug bundleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: RJP-Stream-V1.3-Android
+          name: RJP-Stream-V1.5-Android
           path: |
             android/app/build/outputs/apk/debug/app-debug.apk
             android/app/build/outputs/bundle/debug/app-debug.aab
