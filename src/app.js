@@ -1,13 +1,21 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-const APP_VERSION = '1.5.0';
-const STORAGE_KEY = 'rjpStreamStateV15';
-const LEGACY_KEYS = ['rjpStreamStateV14','rjpStreamStateV13','rjpStreamStateV12','rjpStreamStateV11','rjpStreamStateV10','rjpStreamStateV3','rjpStreamStateV2','rjpStreamState'];
+const APP_VERSION = '1.6.0';
+const STORAGE_KEY = 'rjpStreamStateV16';
+const LEGACY_KEYS = ['rjpStreamStateV15','rjpStreamStateV14','rjpStreamStateV13','rjpStreamStateV12','rjpStreamStateV11','rjpStreamStateV10','rjpStreamStateV3','rjpStreamStateV2','rjpStreamState'];
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const GIS_URL = 'https://accounts.google.com/gsi/client';
 const HLS_JS_URL = 'https://cdn.jsdelivr.net/npm/hls.js@1.7.2/dist/hls.min.js';
 const DASH_JS_URL = 'https://cdn.dashjs.org/v5.2.1/modern/umd/dash.all.min.js';
+
+// Listas comunitárias gratuitas: os conteúdos são obtidos diretamente dos respetivos projetos.
+// Não são fornecidos canais premium nem garantida a disponibilidade de cada emissão.
+const IPTV_FREE_PRESETS = [
+  {id:'sport',name:'Desporto internacional · IPTV-org',url:'https://iptv-org.github.io/iptv/categories/sports.m3u',detail:'Canais desportivos públicos internacionais'},
+  {id:'pt',name:'Portugal · M3UPT',url:'https://m3upt.com/iptv',detail:'Canais portugueses e alguns canais de desporto'},
+  {id:'global',name:'Free-TV · Internacional',url:'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',detail:'Televisão internacional gratuita'}
+];
 
 const NAV = [
   ['inicio','⌂','Início'], ['tv','▣','TV'], ['filmes','▶','Filmes'], ['series','▤','Séries'],
@@ -271,6 +279,12 @@ function sourcesPage(){
       <button class="source-action" id="addWebProvider"><span class="bigicon">🌐</span><b>Atalho Web</b><small>Adicionar manualmente um portal/serviço</small></button>
       <button class="source-action" id="driveSetup"><span class="bigicon">☁</span><b>Google Drive</b><small>${state.drive.connected?'Ligado · sincronizar':'Ler pasta RJP Stream'}</small></button>
       <button class="source-action" id="backupMenu"><span class="bigicon">💾</span><b>Backup</b><small>Exportar/importar configuração</small></button>
+    </div>
+    <div class="panel top-gap" style="background:var(--panel,transparent)">
+      <div class="section-head"><div><h3>🏟️ IPTV Free · Listas públicas</h3><div class="sub">Escolhe uma fonte, consulta os canais disponíveis e seleciona quais importar. Sem canais premium ou credenciais.</div></div></div>
+      <div class="source-actions">
+      ${IPTV_FREE_PRESETS.map(p=>`<button class="source-action" data-free-preset="${p.id}"><span class="bigicon">${p.id==='sport'?'🏆':p.id==='pt'?'🇵🇹':'🌍'}</span><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.detail)}</small></button>`).join('')}
+      </div><p class="micro">As playlists são mantidas por terceiros. A disponibilidade depende dos direitos, do país e do formato do stream. Alguns serviços exigem cabeçalhos especiais ou DRM e podem não tocar no leitor integrado.</p>
     </div>
     <div class="kpi-grid"><div class="kpi"><b>${stats.sources}</b><small>Fontes guardadas</small></div><div class="kpi"><b>${stats.enabled}</b><small>Fontes ativas</small></div><div class="kpi"><b>${stats.items}</b><small>Itens carregados</small></div><div class="kpi"><b>${state.epg?.channels||0}</b><small>Canais no EPG</small></div></div>
   </div>
@@ -640,6 +654,19 @@ function footballExampleModal(){
 
 function bindSources(){
   $('#importM3U')?.addEventListener('click',()=>$('#m3uFileInput').click());
+  $$('[data-free-preset]').forEach(b=>b.addEventListener('click',async()=>{
+    const preset=IPTV_FREE_PRESETS.find(p=>p.id===b.dataset.freePreset);
+    if(!preset)return;
+    const existing=state.sources.find(src=>src.remoteUrl===preset.url);
+    if(existing){return manageRemoteSource(existing.id);}
+    const old=b.innerHTML;b.disabled=true;b.textContent='A carregar lista…';
+    try{
+      const catalog=await loadRemoteCatalog({name:preset.name,type:'M3U',url:preset.url});
+      playlistPreviewModal({name:preset.name,type:'M3U',origin:preset.url,originType:'remote',remoteUrl:preset.url,items:catalog.items});
+    }catch(err){toast(`Não foi possível carregar ${preset.name}: ${err.message}. Podes tentar adicionar o URL manualmente.`);}
+    finally{b.disabled=false;b.innerHTML=old;}
+  }));
+
   $('#importEpg')?.addEventListener('click',epgModal);
   $('#importBundle')?.addEventListener('click',()=>$('#bundleFileInput').click());
   $('#addWebProvider')?.addEventListener('click',()=>webProviderModal());
