@@ -1,9 +1,9 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 
-const APP_VERSION = '1.6.0';
-const STORAGE_KEY = 'rjpStreamStateV16';
-const LEGACY_KEYS = ['rjpStreamStateV15','rjpStreamStateV14','rjpStreamStateV13','rjpStreamStateV12','rjpStreamStateV11','rjpStreamStateV10','rjpStreamStateV3','rjpStreamStateV2','rjpStreamState'];
+const APP_VERSION = '1.7.0';
+const STORAGE_KEY = 'rjpStreamStateV17';
+const LEGACY_KEYS = ['rjpStreamStateV16','rjpStreamStateV15','rjpStreamStateV14','rjpStreamStateV13','rjpStreamStateV12','rjpStreamStateV11','rjpStreamStateV10','rjpStreamStateV3','rjpStreamStateV2','rjpStreamState'];
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const GIS_URL = 'https://accounts.google.com/gsi/client';
 const HLS_JS_URL = 'https://cdn.jsdelivr.net/npm/hls.js@1.7.2/dist/hls.min.js';
@@ -13,6 +13,8 @@ const DASH_JS_URL = 'https://cdn.dashjs.org/v5.2.1/modern/umd/dash.all.min.js';
 // Não são fornecidos canais premium nem garantida a disponibilidade de cada emissão.
 const IPTV_FREE_PRESETS = [
   {id:'sport',name:'Desporto internacional · IPTV-org',url:'https://iptv-org.github.io/iptv/categories/sports.m3u',detail:'Canais desportivos públicos internacionais'},
+  {id:'auto',name:'Motorsport e automóveis · IPTV-org',url:'https://iptv-org.github.io/iptv/categories/auto.m3u',detail:'Canais públicos sobre automobilismo, veículos e motociclismo (não garante F1 ou MotoGP em direto)'},
+  {id:'br',name:'Brasil · IPTV-org',url:'https://iptv-org.github.io/iptv/countries/br.m3u',detail:'Canais brasileiros públicos, alguns com programação desportiva'},
   {id:'pt',name:'Portugal · M3UPT',url:'https://m3upt.com/iptv',detail:'Canais portugueses e alguns canais de desporto'},
   {id:'global',name:'Free-TV · Internacional',url:'https://raw.githubusercontent.com/Free-TV/IPTV/master/playlist.m3u8',detail:'Televisão internacional gratuita'}
 ];
@@ -283,7 +285,7 @@ function sourcesPage(){
     <div class="panel top-gap" style="background:var(--panel,transparent)">
       <div class="section-head"><div><h3>🏟️ IPTV Free · Listas públicas</h3><div class="sub">Escolhe uma fonte, consulta os canais disponíveis e seleciona quais importar. Sem canais premium ou credenciais.</div></div></div>
       <div class="source-actions">
-      ${IPTV_FREE_PRESETS.map(p=>`<button class="source-action" data-free-preset="${p.id}"><span class="bigicon">${p.id==='sport'?'🏆':p.id==='pt'?'🇵🇹':'🌍'}</span><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.detail)}</small></button>`).join('')}
+      ${IPTV_FREE_PRESETS.map(p=>`<button class="source-action" data-free-preset="${p.id}"><span class="bigicon">${p.id==='sport'?'🏆':p.id==='auto'?'🏎️':p.id==='pt'?'🇵🇹':'🌍'}</span><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.detail)}</small></button>`).join('')}
       </div><p class="micro">As playlists são mantidas por terceiros. A disponibilidade depende dos direitos, do país e do formato do stream. Alguns serviços exigem cabeçalhos especiais ou DRM e podem não tocar no leitor integrado.</p>
     </div>
     <div class="kpi-grid"><div class="kpi"><b>${stats.sources}</b><small>Fontes guardadas</small></div><div class="kpi"><b>${stats.enabled}</b><small>Fontes ativas</small></div><div class="kpi"><b>${stats.items}</b><small>Itens carregados</small></div><div class="kpi"><b>${state.epg?.channels||0}</b><small>Canais no EPG</small></div></div>
@@ -1326,6 +1328,10 @@ async function openPlayer(titleOrMeta,url='',type=''){
   const rec=historyUpsert(meta); save();
   modal(`<div class="modal-head"><div><h3>${escapeHtml(meta.name||'Stream')}</h3><div class="micro" id="playerEngine">A preparar player…</div></div><button class="icon-btn" data-close>✕</button></div><div class="video-wrap"><video id="rjpVideo" controls autoplay playsinline></video><div class="player-overlay" id="playerOverlay">A carregar…</div></div><div class="note" id="playerNote">HLS e DASH são reproduzidos através de motores web quando o dispositivo os suporta. Não existe bypass de DRM.</div>`);
   const video=$('#rjpVideo'), overlay=$('#playerOverlay'), engine=$('#playerEngine');
+  const playerNote=$('#playerNote');
+  const retryButton=document.createElement('button'); retryButton.className='btn';retryButton.type='button';retryButton.textContent='↻ Tentar novamente';retryButton.style.margin='12px 0'; retryButton.hidden=true;
+  playerNote?.appendChild(retryButton);retryButton.addEventListener('click',()=>openPlayer(meta));
+  const showPlayerFailure=(message,detail='')=>{overlay.classList.remove('hidden');overlay.textContent=message;retryButton.hidden=false;if(detail) playerNote.firstChild.textContent=detail+' ';};
   if(!meta.url){overlay.textContent='Sem URL de reprodução.';engine.textContent='Sem fonte';return;}
   const detected=(meta.type||detectStreamType(meta.url)).toUpperCase();
   let lastPersist=0;
@@ -1335,7 +1341,8 @@ async function openPlayer(titleOrMeta,url='',type=''){
     const position=Number.isFinite(video.currentTime)&&video.currentTime>0?video.currentTime:0;
     historyUpsert(meta,{position,duration}); save(); lastPersist=Date.now();
   };
-  playerCleanup=()=>{persistPosition();try{activeHls?.destroy?.();}catch{} try{activeDash?.reset?.();}catch{} activeHls=null;activeDash=null;};
+  let playerClosed=false;
+  playerCleanup=()=>{playerClosed=true;persistPosition();try{activeHls?.destroy?.();}catch{} try{activeDash?.reset?.();}catch{} activeHls=null;activeDash=null;};
   try{
     if(detected==='HLS' || meta.url.toLowerCase().includes('.m3u8')){
       const nativeHls = !!video.canPlayType('application/vnd.apple.mpegurl');
@@ -1344,8 +1351,31 @@ async function openPlayer(titleOrMeta,url='',type=''){
       else {
         await loadScriptOnce(HLS_JS_URL,()=>globalThis.Hls);
         if(!Hls.isSupported()) throw new Error('HLS.js não é suportado neste dispositivo.');
-        activeHls=new Hls({enableWorker:true,lowLatencyMode:true}); activeHls.loadSource(meta.url); activeHls.attachMedia(video); engine.textContent='HLS.js 1.7.2';
-        activeHls.on(Hls.Events.ERROR,(_,data)=>{if(data?.fatal) overlay.textContent=`Erro HLS: ${data.type||''} ${data.details||''}`;});
+        activeHls=new Hls({enableWorker:true,lowLatencyMode:false,maxBufferLength:30,manifestLoadingMaxRetry:2,levelLoadingMaxRetry:2,fragLoadingMaxRetry:2});
+        activeHls.attachMedia(video);
+        activeHls.on(Hls.Events.MEDIA_ATTACHED,()=>{if(!playerClosed)activeHls?.loadSource(meta.url);});
+        engine.textContent='HLS.js 1.7.2';
+        let networkRetries=0,mediaRetries=0;
+        activeHls.on(Hls.Events.ERROR,(_,data)=>{
+          if(playerClosed||!data?.fatal)return;
+          const status=data.response?.code||data.response?.status||data.networkDetails?.status||0;
+          const errorDetails=String(data.details||'');
+          if(data.type===Hls.ErrorTypes.NETWORK_ERROR && networkRetries<2 && ![401,403,404,410,451].includes(+status)){
+            networkRetries++; overlay.classList.remove('hidden');overlay.textContent=`Falha de rede. A tentar novamente (${networkRetries}/2)…`;
+            try{activeHls.startLoad();}catch{}return;
+          }
+          if(data.type===Hls.ErrorTypes.MEDIA_ERROR && mediaRetries<1){
+            mediaRetries++;try{activeHls.recoverMediaError();return;}catch{}
+          }
+          let message='O canal não conseguiu iniciar a transmissão.';
+          if(status===401||status===403)message=`Acesso não autorizado (HTTP ${status}).`;
+          else if(status===404||status===410)message=`O endereço do canal já não está disponível (HTTP ${status}).`;
+          else if(status===451)message='Transmissão indisponível nesta região (HTTP 451).';
+          else if(errorDetails.includes('manifest'))message='Não foi possível carregar o manifesto HLS. O servidor pode estar offline, bloquear CORS ou exigir autorização.';
+          else if(data.type===Hls.ErrorTypes.MEDIA_ERROR)message='O formato ou codec de vídeo não é compatível.';
+          else if(status)message=`Falha de transmissão (HTTP ${status}).`;
+          showPlayerFailure(message,`Diagnóstico: ${data.type||'erro'} / ${errorDetails||'desconhecido'}${status?' / HTTP '+status:''}. Não são contornadas restrições de acesso, DRM ou região.`);
+        });
       }
     } else if(detected==='DASH' || meta.url.toLowerCase().includes('.mpd')){
       await loadScriptOnce(DASH_JS_URL,()=>globalThis.dashjs);
@@ -1359,10 +1389,10 @@ async function openPlayer(titleOrMeta,url='',type=''){
     video.addEventListener('timeupdate',()=>{if(Date.now()-lastPersist>5000)persistPosition();});
     video.addEventListener('pause',persistPosition);
     video.addEventListener('ended',()=>{historyUpsert(meta,{position:0,duration:Number.isFinite(video.duration)?video.duration:0});save();});
-    video.addEventListener('canplay',()=>overlay.classList.add('hidden'),{once:true});
-    video.addEventListener('playing',()=>overlay.classList.add('hidden'),{once:true});
-    video.addEventListener('error',()=>{overlay.textContent='O stream não pôde ser reproduzido neste dispositivo.';});
-  } catch(err){ overlay.textContent=err.message; engine.textContent='Erro'; }
+    video.addEventListener('canplay',()=>{overlay.classList.add('hidden');retryButton.hidden=true;},{once:true});
+    video.addEventListener('playing',()=>{overlay.classList.add('hidden');retryButton.hidden=true;},{once:true});
+    video.addEventListener('error',()=>{if(!playerClosed)showPlayerFailure('O stream não pôde ser reproduzido neste dispositivo.');});
+  } catch(err){ showPlayerFailure(err.message); engine.textContent='Erro'; }
 }
 
 function cleanupPlayer(){ if(playerCleanup){try{playerCleanup();}catch{} playerCleanup=null;} }

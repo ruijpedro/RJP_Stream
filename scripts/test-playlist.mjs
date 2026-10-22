@@ -26,4 +26,4 @@ const subset=api.applySourceSelection(items,'subset',selected);
 assert.equal(subset.length,2);
 assert.equal(subset.every(x=>x.group==='Desporto'),true);
 assert.equal(api.applySourceSelection(items,'all',[]).length,3);
-console.log('Playlist analyzer tests RJP Stream V1.6 OK');
+console.log('Playlist analyzer tests RJP Stream V1.7 OK');

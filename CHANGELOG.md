@@ -1,3 +1,12 @@
+## V1.7 — Melhorias de reprodução e IPTV Free
+- Diagnóstico mais específico de falhas HLS, incluindo HTTP quando disponível.
+- Recuperação limitada de erros transitórios de rede e de descodificação.
+- Botão Tentar novamente no leitor.
+- Fontes opcionais IPTV-org Auto (motorizados) e Brasil.
+- Migração automática das preferências V1.6 e anteriores.
+- Workflow GitHub gera apenas APK debug (sem AAB).
+- ZIP de código-fonte limpo, sem artefactos de compilação.
+
 # CHANGELOG
 
 ## 1.6.0 — 2026-09-23
