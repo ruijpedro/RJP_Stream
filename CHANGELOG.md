@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 1.5.0 — 2026-09-23
+## 1.6.0 — 2026-09-23
 - Novo indexador de catálogo Web para os Atalhos Web adicionados pelo utilizador.
 - Deteção de filmes, séries/episódios e programas por JSON-LD e elementos visíveis no HTML.
 - Cada site mostra contadores de jogos e itens de catálogo.
@@ -9,7 +9,7 @@
 - Pesquisa global inclui catálogo Web.
 - Atualização manual/automática reindexa jogos e catálogo.
 - Mantida a regra de não extrair URLs de vídeo, players, DRM, tokens ou autenticação.
-- `versionName 1.5.0`, `versionCode 10500`.
+- `versionName 1.6.0`, `versionCode 10600`.
 
 ## 1.4.0 — 2026-09-22
 - Adicionado indexador de jogos nos Atalhos Web adicionados pelo utilizador.

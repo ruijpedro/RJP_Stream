@@ -1,8 +1,8 @@
-# RJP Stream V1.5
+# RJP Stream V1.6
 
 Evolução da V1.4 com foco em **listar o que está disponível nos sites adicionados**. Para além dos jogos, a aplicação passa a indexar metadados públicos de **filmes, séries e programas** visíveis na página adicionada e a apresentá-los nos respetivos separadores.
 
-## Novidades V1.5
+## Novidades V1.6
 
 - **Catálogo Web por Atalho Web**.
 - Ao adicionar/editar um site podes ativar separadamente:
@@ -20,7 +20,7 @@ Evolução da V1.4 com foco em **listar o que está disponível nos sites adicio
 - Deteção por JSON-LD (`Movie`, `TVSeries`, `TVEpisode`, `BroadcastEvent` e tipos relacionados) e por cartões/links visíveis no HTML.
 - Guarda apenas metadados de catálogo: título, categoria, imagem quando disponível, descrição curta/metadados e **link da página pública**.
 - Atualização global e atualização automática voltam a indexar os sites configurados.
-- Android `versionName 1.5.0` / `versionCode 10500`.
+- Android `versionName 1.6.0` / `versionCode 10600`.
 
 ## Como usar
 
@@ -36,7 +36,7 @@ Se um site tiver páginas separadas para Filmes/Séries/Programas, podes adicion
 
 ## Limites do indexador Web
 
-A V1.5 indexa apenas **metadados públicos** devolvidos no HTML/JSON-LD da página adicionada. Não extrai URLs de vídeo, iframes/players, tokens, DRM, credenciais ou mecanismos de autenticação.
+A V1.6 indexa apenas **metadados públicos** devolvidos no HTML/JSON-LD da página adicionada. Não extrai URLs de vídeo, iframes/players, tokens, DRM, credenciais ou mecanismos de autenticação.
 
 Sites que constroem o catálogo exclusivamente depois de executar JavaScript podem não ser detetados. No browser, Samsung e LG, uma origem também pode bloquear leitura por CORS. No APK Android/Android TV, a app dispõe do fallback HTTP nativo já existente.
 
@@ -82,6 +82,13 @@ Saídas: `tv-builds/tizen/` e `tv-builds/webos/`.
 ## Identificação
 
 - Nome: **RJP Stream**
-- Versão: **1.5.0**
+- Versão: **1.6.0**
 - Android appId: `pt.rjp.stream`
 - Autor: RJP
+
+
+## IPTV Free (V1.6)
+
+Em **Fontes → IPTV Free**, escolher uma das três listas públicas: **IPTV-org Desporto**, **M3UPT Portugal** ou **Free-TV**. A aplicação descarrega a playlist, permite pré-visualizar/selecionar canais e guarda a fonte para atualização posterior. Fontes já importadas abrem o gestor de canais. Também é possível inserir qualquer URL M3U autorizada manualmente.
+
+A app não aloja nem retransmite canais. Alguns streams podem exigir CORS, cabeçalhos HTTP específicos, autorização territorial ou DRM que o leitor não suporta. A disponibilidade não é garantida.
